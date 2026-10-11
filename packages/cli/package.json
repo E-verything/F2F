@@ -1,0 +1,39 @@
+{
+  "name": "f2f-cli",
+  "version": "0.1.0",
+  "description": "F2F: turn a Figma export into a repo-aware brief for any AI coding agent, then measure the built screen against the design.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "f2f": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "ajv": "8.20.0"
+  },
+  "keywords": [
+    "figma",
+    "design-to-code",
+    "ai-agent",
+    "frontend",
+    "flutter",
+    "react",
+    "visual-regression",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/E-verything/F2F.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/E-verything/F2F#readme",
+  "bugs": "https://github.com/E-verything/F2F/issues"
+}
