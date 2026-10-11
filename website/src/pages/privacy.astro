@@ -1,0 +1,40 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const title = 'Privacy — F2F';
+const description = 'F2F runs entirely on your machine. The Figma plugin has no network access, the CLI never uploads anything and there is no telemetry.';
+
+const points = [
+  { h: 'Figma plugin', p: 'The plugin manifest allows no network domains, so it cannot send data anywhere. It reads the selected design, builds a ZIP in Figma and saves it where your downloads go.' },
+  { h: 'CLI', p: 'The CLI reads the exported folder and your repository on your own computer. It never opens env or key files and makes no network requests, except to the local app you ask it to verify.' },
+  { h: 'Verification', p: 'Verify drives a browser, emulator or simulator you already have installed. Screenshots and reports are written into your project folder.' },
+  { h: 'This website', p: 'No analytics, no cookies, no tracking scripts and no third-party fonts. Pages are static HTML.' },
+  { h: 'Your AI agent', p: 'Your agent and its provider have their own terms. F2F only writes files the agent reads; it never sends them to a model.' },
+] as const;
+---
+
+<BaseLayout title={title} description={description}>
+  <article class="container section wrap">
+    <header class="page-head">
+      <span class="label">Privacy</span>
+      <h1>Your designs stay on your machine.</h1>
+      <p class="lede">No server, no account, no telemetry. Here is exactly what touches what.</p>
+    </header>
+    <div class="list">
+      {points.map((x) => (
+        <section class="glass-card point">
+          <h2>{x.h}</h2>
+          <p>{x.p}</p>
+        </section>
+      ))}
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .wrap { max-width: 820px; }
+  .list { display: grid; gap: var(--space-m); }
+  .point { padding: var(--space-xl); border-radius: var(--radius-l); display: grid; gap: var(--space-s); }
+  .point h2 { font-size: 1.1875rem; }
+  @media (max-width: 640px) { .point { padding: var(--space-l); } }
+</style>

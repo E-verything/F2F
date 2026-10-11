@@ -1,0 +1,129 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/Icon.astro';
+import { SITE } from '../site';
+
+const title = 'Developers — F2F';
+const description = 'How the Figma plugin, the shared core and the f2f CLI fit together, what is in a f2f package, and how to build and test the tool.';
+
+const packages = [
+  { dir: 'packages/core', name: 'Core', body: 'Design model, normaliser, outline writer, package writer and validator with its JSON Schema. Pure and deterministic, so it runs inside the plugin and in Node.', ships: 'Bundled into both' },
+  { dir: 'packages/plugin', name: 'Figma plugin', body: 'Reads an explicit property list through the Plugin API, handles mixed values, catches every failing read and zips the package in the browser. No network access.', ships: 'Figma Community' },
+  { dir: 'packages/cli', name: 'CLI', body: 'inspect, build, verify, refresh and bench. Repo scanning, brief compiler, Chrome DevTools, adb and idb drivers, and the PNG diff.', ships: 'npm' },
+] as const;
+
+const layout = [
+  ['DESIGN.md', 'Tokens, Figma → code rules, the verify loop'],
+  ['manifest.json', 'Source, scope, status, features, SHA-256 of every file'],
+  ['screens/<screen>.md', 'Compact outline, one line per layer (agents read this)'],
+  ['screens/<screen>.json', 'Full node tree: source, calculated, inferred, unsupported'],
+  ['components/components.json', 'Shared definitions once; instances reference them'],
+  ['tokens/tokens.json', 'Variables with modes and aliases, styles'],
+  ['assets/', 'Content-hashed SVG/PNG/JPG and reference screenshots'],
+  ['briefs/<feature>.md', 'Written by build'],
+  ['verification/<screen>.*', 'Written by verify'],
+] as const;
+
+const commands = [
+  ['npm install', 'Install dev dependencies'],
+  ['npm run check', 'Type-check, run all tests, build plugin and CLI'],
+  ['npm link', 'Make f2f available in every folder'],
+] as const;
+---
+
+<BaseLayout title={title} description={description}>
+  <article class="container section wrap">
+    <header class="page-head">
+      <span class="label">Developers</span>
+      <h1>Small, typed, deterministic.</h1>
+      <p class="lede">One TypeScript repository with three packages. The plugin and the CLI share one core, so the export and the checks can never disagree.</p>
+      {SITE.repoUrl && (
+        <div class="cta-row head-cta">
+          <a href={SITE.repoUrl} class="btn btn-primary" target="_blank" rel="noopener"><Icon name="github" size={18} />Source code</a>
+          <a href={`${SITE.repoUrl}/issues`} class="btn btn-ghost" target="_blank" rel="noopener">Open issues</a>
+        </div>
+      )}
+    </header>
+
+    <section>
+      <h2>Repository layout</h2>
+      <div class="grid-auto">
+        {packages.map((p) => (
+          <article class="glass-card pkg">
+            <code>{p.dir}</code>
+            <h3>{p.name}</h3>
+            <p>{p.body}</p>
+            <span class="ships"><Icon name="package" size={16} />{p.ships}</span>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section>
+      <h2>What is in a f2f package</h2>
+      <ul class="rows glass-card" role="list">
+        {layout.map(([path, what]) => (
+          <li><code>{path}</code><span>{what}</span></li>
+        ))}
+      </ul>
+    </section>
+
+    <section>
+      <h2>Build and test</h2>
+      <p class="sub">Requires Node 22 or newer.</p>
+      <ul class="rows glass-card" role="list">
+        {commands.map(([cmd, what]) => (
+          <li><code>{cmd}</code><span>{what}</span></li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="glass-card principles">
+      <h2>Design principles</h2>
+      <ul role="list">
+        <li>Facts are never mixed with guesses: each value is source, calculated or inferred.</li>
+        <li>Uncertain component matches are marked "confirm", never assumed.</li>
+        <li>The repo scan is read-only and never opens env or key files.</li>
+        <li>No server, no paid API, no telemetry. Optional tools (Chrome, adb, idb) are never downloaded for you.</li>
+      </ul>
+    </section>
+  </article>
+</BaseLayout>
+
+<style>
+  .wrap { max-width: 1040px; }
+  .head-cta { margin-top: var(--space-xl); }
+
+  section { margin-top: var(--space-3xl); }
+  section > h2 { margin-bottom: var(--space-l); }
+  .sub { margin: calc(var(--space-s) * -1) 0 var(--space-m); }
+
+  .pkg { padding: var(--space-xl); display: grid; gap: var(--space-s); align-content: start; }
+  .pkg code { justify-self: start; color: var(--accent-2); }
+  .ships { display: inline-flex; align-items: center; gap: 6px; margin-top: var(--space-s); font-size: 0.8125rem; font-weight: 600; color: var(--accent); }
+
+  .rows { list-style: none; padding: var(--space-s) var(--space-l); border-radius: var(--radius-l); }
+  .rows li {
+    display: grid;
+    grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+    gap: var(--space-l);
+    padding: var(--space-m) 0;
+    border-bottom: 1px dashed var(--border-glass);
+    align-items: baseline;
+  }
+  .rows li:last-child { border-bottom: none; }
+  .rows code { justify-self: start; }
+  .rows span { color: var(--text-label); font-size: 0.9375rem; }
+
+  .principles { padding: var(--space-xl); }
+  .principles h2 { margin-bottom: var(--space-l); }
+  .principles ul { list-style: none; display: grid; gap: var(--space-m); }
+  .principles li { position: relative; padding-left: var(--space-l); color: var(--text-label); }
+  .principles li::before { content: '→'; position: absolute; left: 0; color: var(--accent-2); }
+
+  @media (max-width: 640px) {
+    .rows { padding: var(--space-xs) var(--space-m); }
+    .rows li { grid-template-columns: 1fr; gap: var(--space-xs); }
+    .principles { padding: var(--space-l); }
+  }
+</style>

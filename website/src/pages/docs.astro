@@ -1,0 +1,112 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import CopyCode from '../components/CopyCode.astro';
+import { Content, getHeadings } from '../../../docs/getting-started.md';
+
+const title = 'Quick start — F2F';
+const description = 'Set up the Figma plugin and the f2f CLI, then run the export, brief, implement and verify loop for your first screen in about 10 minutes.';
+const toc = getHeadings().filter((h) => h.depth === 2);
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="container section layout">
+    <aside class="toc" aria-label="On this page">
+      <nav class="glass-card toc-card">
+        <span class="label">On this page</span>
+        <ul role="list">
+          {toc.map((h) => <li><a href={`#${h.slug}`}>{h.text}</a></li>)}
+        </ul>
+      </nav>
+    </aside>
+    <article class="prose">
+      <Content />
+    </article>
+  </div>
+  <CopyCode />
+</BaseLayout>
+
+<style>
+  .layout {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: var(--space-2xl);
+    align-items: start;
+    padding-top: var(--space-2xl);
+  }
+
+  .toc { position: sticky; top: 104px; }
+  .toc-card { padding: var(--space-l); border-radius: var(--radius-l); }
+  .toc ul { list-style: none; display: grid; gap: 2px; margin-top: var(--space-m); }
+  .toc a {
+    display: block;
+    padding: 6px var(--space-s);
+    border-radius: var(--radius-s);
+    font-size: 0.875rem;
+    color: var(--text-label);
+  }
+  .toc a:hover { background: var(--glass-bg); color: var(--text-primary); }
+
+  /* Markdown output is unstyled HTML, so the article styles its descendants globally within .prose. */
+  .prose { max-width: 820px; }
+  .prose :global(h1) { font-size: clamp(2rem, 4.5vw, 3rem); margin-bottom: var(--space-l); }
+  .prose :global(h2) {
+    font-size: clamp(1.5rem, 2.6vw, 1.875rem);
+    margin: var(--space-3xl) 0 var(--space-m);
+    padding-top: var(--space-l);
+    border-top: 1px solid var(--border-glass);
+    scroll-margin-top: 104px;
+  }
+  .prose :global(h3) { font-size: 1.1875rem; margin: var(--space-xl) 0 var(--space-s); scroll-margin-top: 104px; }
+  .prose :global(p),
+  .prose :global(li) { color: var(--text-label); font-size: 1.0313rem; }
+  .prose :global(p) { margin: var(--space-m) 0; }
+  .prose :global(strong) { color: var(--text-primary); }
+  .prose :global(ol),
+  .prose :global(ul) { margin: var(--space-m) 0; padding-left: var(--space-l); display: grid; gap: var(--space-s); }
+  .prose :global(a) { color: var(--accent-2); text-decoration: underline; text-underline-offset: 3px; }
+  .prose :global(blockquote) {
+    margin: var(--space-l) 0;
+    padding: var(--space-m) var(--space-l);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 var(--radius-m) var(--radius-m) 0;
+    background: var(--glass-bg);
+  }
+  .prose :global(blockquote p) { margin: 0; color: var(--text-primary); }
+
+  .prose :global(pre) {
+    margin: var(--space-m) 0;
+    padding: var(--space-l) 84px var(--space-l) var(--space-l);
+    border-radius: var(--radius-m);
+    border: 1px solid var(--border-glass);
+    background: var(--glass-panel) !important;
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .prose :global(table) {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    margin: var(--space-l) 0;
+    border-collapse: collapse;
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-m);
+    font-size: 0.9375rem;
+  }
+  .prose :global(th),
+  .prose :global(td) {
+    padding: var(--space-s) var(--space-m);
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--border-glass);
+    color: var(--text-label);
+    min-width: 140px;
+  }
+  .prose :global(th) { color: var(--text-primary); background: var(--glass-panel); font-weight: 650; }
+  .prose :global(tr:last-child td) { border-bottom: none; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .toc { position: static; }
+  }
+</style>

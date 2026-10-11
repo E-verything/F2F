@@ -1,0 +1,332 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:f2f:package-schema:1.0.0",
+  "title": "F2F package, schema 1.0.0",
+  "description": "Canonical, framework-independent design representation. Units: lengths in px, rotation in degrees (Figma convention, counter-clockwise positive), opacity/alpha 0-1, colours #rrggbb. Numbers are rounded to 4 decimal places. Classification is positional: node.geometry/layout/style/text/component are source facts read from Figma; node.calculated is derived from source facts; node.inferred are guesses with a basis; node.unsupported lists properties not normalized.",
+  "$defs": {
+    "id": { "type": "string", "minLength": 1, "description": "Stable Figma node/variable/style id." },
+    "schemaVersion": { "const": "1.0.0" },
+    "box": {
+      "type": "object",
+      "description": "Axis-aligned box in px.",
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false,
+      "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "width": { "type": "number" }, "height": { "type": "number" } }
+    },
+    "ref": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": { "id": { "$ref": "#/$defs/id" }, "name": { "type": ["string", "null"], "description": "Null when the referenced definition was not exported." } }
+    },
+    "refMap": { "type": "object", "additionalProperties": { "$ref": "#/$defs/ref" }, "description": "Bound variables keyed by property path, e.g. fills[0] or paddingLeft." },
+    "matrix": { "type": "array", "items": { "type": "array", "items": { "type": "number" } }, "description": "2x3 affine transform." },
+    "hex": { "type": "string", "pattern": "^#[0-9a-f]{6}$" },
+    "paint": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["solid", "gradient", "image", "unsupported"] },
+        "color": { "$ref": "#/$defs/hex" },
+        "kind": { "enum": ["linear", "radial", "angular", "diamond"] },
+        "stops": { "type": "array" },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1, "description": "Paint opacity; omitted means 1." },
+        "visible": { "const": false, "description": "Omitted means visible." },
+        "blendMode": { "type": "string" },
+        "variable": { "$ref": "#/$defs/ref" },
+        "assetId": { "type": ["string", "null"], "description": "Asset in assets/manifest.json, null when the image bytes were unavailable." },
+        "imageHash": { "type": ["string", "null"] },
+        "scaleMode": { "type": "string" },
+        "transform": { "$ref": "#/$defs/matrix" },
+        "rotation": { "type": "number" },
+        "filters": { "type": "object" },
+        "sourceType": { "type": "string" },
+        "raw": {}
+      }
+    },
+    "effect": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["drop-shadow", "inner-shadow", "layer-blur", "background-blur", "unsupported"] },
+        "color": { "$ref": "#/$defs/hex" },
+        "alpha": { "type": "number" },
+        "offsetX": { "type": "number" },
+        "offsetY": { "type": "number" },
+        "radius": { "type": "number", "description": "Blur radius in px." },
+        "spread": { "type": "number" },
+        "visible": { "type": "boolean" },
+        "blendMode": { "type": "string" },
+        "showShadowBehindNode": { "type": "boolean" },
+        "variables": { "$ref": "#/$defs/refMap" },
+        "sourceType": { "type": "string" },
+        "raw": {}
+      }
+    },
+    "lineHeight": {
+      "type": "object",
+      "required": ["unit", "value"],
+      "additionalProperties": false,
+      "description": "Configured line height. 'auto' means font-dependent and is not computed.",
+      "properties": { "unit": { "enum": ["px", "percent", "auto"] }, "value": { "type": ["number", "null"] } }
+    },
+    "letterSpacing": {
+      "type": "object",
+      "required": ["unit", "value"],
+      "additionalProperties": false,
+      "properties": { "unit": { "enum": ["px", "percent"] }, "value": { "type": "number" } }
+    },
+    "geometry": {
+      "type": "object",
+      "description": "Source geometry. x/y are parent-relative, absoluteBox/renderBox are canvas coordinates; renderBox includes strokes and effects. Omitted means: rotation 0; relativeTransform a pure translation by x/y; absoluteBox = screen root absoluteBox + calculated.screenBox (kept on the root only); renderBox = absoluteBox.",
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number" }, "y": { "type": "number" }, "width": { "type": "number" }, "height": { "type": "number" }, "rotation": { "type": "number" },
+        "relativeTransform": { "anyOf": [{ "$ref": "#/$defs/matrix" }, { "type": "null" }] },
+        "absoluteBox": { "anyOf": [{ "$ref": "#/$defs/box" }, { "type": "null" }] },
+        "renderBox": { "anyOf": [{ "$ref": "#/$defs/box" }, { "type": "null" }] }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "description": "Source Auto Layout container and child properties. Only non-default values are present. Defaults: mode none, sizing FIXED/FIXED, align INHERIT, grow 0, positioning auto, no min/max, constraints MIN/MIN (and constraints are omitted for in-flow Auto Layout children, where Figma ignores them), clipsContent false.",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["none", "horizontal", "vertical", "grid"] },
+        "wrap": { "type": "string" },
+        "primaryAxisAlign": { "type": "string" },
+        "counterAxisAlign": { "type": "string" },
+        "counterAxisAlignContent": { "type": "string" },
+        "padding": { "type": "object", "required": ["top", "right", "bottom", "left"], "additionalProperties": false, "properties": { "top": { "type": "number" }, "right": { "type": "number" }, "bottom": { "type": "number" }, "left": { "type": "number" } } },
+        "itemSpacing": { "type": "number", "description": "Configured gap between Auto Layout children in px." },
+        "counterAxisSpacing": { "type": ["number", "null"] },
+        "primaryAxisSizing": { "type": "string" },
+        "counterAxisSizing": { "type": "string" },
+        "itemReverseZIndex": { "type": "boolean" },
+        "strokesIncludedInLayout": { "type": "boolean" },
+        "grid": { "type": "object" },
+        "sizing": { "type": "object", "properties": { "horizontal": { "type": ["string", "null"] }, "vertical": { "type": ["string", "null"] } } },
+        "align": { "type": "string" },
+        "grow": { "type": "number" },
+        "positioning": { "enum": ["auto", "absolute"] },
+        "min": { "type": "object" },
+        "max": { "type": "object" },
+        "constraints": { "type": "object", "required": ["horizontal", "vertical"], "properties": { "horizontal": { "type": "string" }, "vertical": { "type": "string" } } },
+        "aspectRatio": { "type": ["number", "null"], "description": "Locked width/height ratio." },
+        "clipsContent": { "type": "boolean" }
+      }
+    },
+    "style": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fills": { "anyOf": [{ "type": "array", "items": { "$ref": "#/$defs/paint" } }, { "const": "MIXED" }] },
+        "strokes": { "type": "array", "items": { "$ref": "#/$defs/paint" } },
+        "strokeWeight": { "anyOf": [{ "type": "number" }, { "type": "object" }, { "const": "MIXED" }] },
+        "strokeAlign": { "type": "string" },
+        "strokeCap": { "type": "string" },
+        "strokeJoin": { "type": "string" },
+        "dashPattern": { "type": "array", "items": { "type": "number" } },
+        "cornerRadius": { "anyOf": [{ "type": "number" }, { "type": "object", "required": ["topLeft", "topRight", "bottomRight", "bottomLeft"] }] },
+        "cornerSmoothing": { "type": "number" },
+        "effects": { "type": "array", "items": { "$ref": "#/$defs/effect" } },
+        "opacity": { "type": "number" },
+        "blendMode": { "type": "string" },
+        "isMask": { "type": "boolean" },
+        "maskType": { "type": "string" },
+        "styles": { "type": "object", "description": "Shared style references (Figma styles).", "additionalProperties": { "anyOf": [{ "$ref": "#/$defs/ref" }, { "const": "MIXED" }] } },
+        "variables": { "$ref": "#/$defs/refMap" }
+      }
+    },
+    "textRun": {
+      "type": "object",
+      "description": "A range of characters sharing one style. start inclusive, end exclusive.",
+      "required": ["start", "end", "characters", "fontFamily", "fontStyle", "fontWeight", "fontSize", "lineHeight", "letterSpacing", "fills"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "integer" }, "end": { "type": "integer" }, "characters": { "type": "string" },
+        "fontFamily": { "type": "string" }, "fontStyle": { "type": "string" }, "fontWeight": { "type": ["number", "null"] }, "fontSize": { "type": "number" },
+        "lineHeight": { "$ref": "#/$defs/lineHeight" }, "letterSpacing": { "$ref": "#/$defs/letterSpacing" },
+        "textDecoration": { "type": "string" }, "textCase": { "type": "string" },
+        "fills": { "type": "array", "items": { "$ref": "#/$defs/paint" } },
+        "textStyle": { "$ref": "#/$defs/ref" },
+        "fillStyle": { "$ref": "#/$defs/ref" },
+        "variables": { "$ref": "#/$defs/refMap" },
+        "hyperlink": {}
+      }
+    },
+    "text": {
+      "type": "object",
+      "required": ["characters", "runs", "hasMissingFont"],
+      "additionalProperties": false,
+      "properties": {
+        "characters": { "type": "string" },
+        "runs": { "type": "array", "items": { "$ref": "#/$defs/textRun" } },
+        "alignHorizontal": { "type": "string" }, "alignVertical": { "type": "string" }, "autoResize": { "type": "string" }, "truncation": { "type": "string" },
+        "maxLines": { "type": ["number", "null"] }, "paragraphSpacing": { "type": "number" }, "paragraphIndent": { "type": "number" }, "listSpacing": { "type": "number" },
+        "leadingTrim": { "type": "string" },
+        "hasMissingFont": { "type": "boolean", "description": "True when Figma reported the font unavailable in the exporting session." }
+      }
+    },
+    "component": {
+      "type": "object",
+      "description": "Instance reference to a shared component in components/components.json.",
+      "required": ["componentId", "componentName", "setId", "variant", "properties", "overrides"],
+      "additionalProperties": false,
+      "properties": {
+        "componentId": { "type": ["string", "null"] }, "componentName": { "type": ["string", "null"] }, "setId": { "type": ["string", "null"] }, "setName": { "type": "string", "description": "Component set name for variant components." },
+        "variant": { "type": ["object", "null"] }, "properties": { "type": ["object", "null"] },
+        "overrides": { "type": "array", "items": { "type": "object", "required": ["nodeId", "fields"], "properties": { "nodeId": { "type": "string" }, "fields": { "type": "array", "items": { "type": "string" } } } } }
+      }
+    },
+    "calculated": {
+      "type": "object",
+      "description": "Derived from source geometry. gaps are measured distances, not configured spacing.",
+      "additionalProperties": false,
+      "properties": {
+        "screenBox": { "$ref": "#/$defs/box" },
+        "insets": { "type": "object", "required": ["left", "top", "right", "bottom"] },
+        "relations": {
+          "type": "object",
+          "required": ["gaps", "alignments", "overlaps", "nearMisses"],
+          "properties": { "gaps": { "type": "array" }, "alignments": { "type": "array" }, "overlaps": { "type": "array" }, "nearMisses": { "type": "array", "description": "Sibling edges within 1px but not equal; likely unintended." } }
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "name", "type", "geometry"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "description": "Figma node type." },
+        "visible": { "const": false, "description": "Present only when the layer is hidden." },
+        "locked": { "type": "boolean" },
+        "geometry": { "$ref": "#/$defs/geometry" },
+        "layout": { "$ref": "#/$defs/layout" },
+        "style": { "$ref": "#/$defs/style" },
+        "text": { "$ref": "#/$defs/text" },
+        "component": { "$ref": "#/$defs/component" },
+        "componentPropertyReferences": { "type": "object" },
+        "asset": { "type": "object", "required": ["assetIds", "role"], "properties": { "assetIds": { "type": "array", "items": { "type": "string" } }, "role": { "type": "string" } } },
+        "exportSettings": { "type": "array" },
+        "calculated": { "$ref": "#/$defs/calculated" },
+        "inferred": { "type": "array", "items": { "type": "object", "required": ["property", "value", "basis"] } },
+        "unsupported": { "type": "array", "items": { "type": "object", "required": ["property", "reason"] } },
+        "childrenOmitted": { "enum": ["identical-to-component-definition", "exported-as-asset"] },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/node" } }
+      }
+    },
+    "screenInfo": {
+      "type": "object",
+      "required": ["id", "name", "slug", "pageId", "pageName", "feature", "kind", "status", "viewport"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "name": { "type": "string" }, "slug": { "type": "string" }, "pageId": { "type": "string" }, "pageName": { "type": "string" },
+        "feature": { "type": ["string", "null"], "description": "Containing Figma section name, if any." },
+        "kind": { "enum": ["frame", "fragment"] },
+        "status": { "type": "object", "required": ["value", "source"], "properties": { "value": { "type": "string" }, "source": { "enum": ["figma-dev-status", "none"] } } },
+        "viewport": { "type": "object", "required": ["width", "height"] },
+        "file": { "type": "string" },
+        "contentHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "screenFile": {
+      "type": "object",
+      "required": ["schemaVersion", "screen", "responsive", "dependencies", "root"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "screen": { "$ref": "#/$defs/screenInfo" },
+        "responsive": {
+          "type": "array",
+          "items": { "type": "object", "required": ["nodeId", "rule", "classification"], "description": "basis is present for non-source rules.", "properties": { "classification": { "enum": ["source", "calculated", "inferred", "unknown"] } } }
+        },
+        "dependencies": {
+          "type": "object",
+          "required": ["components", "assets", "variables", "styles"],
+          "description": "Transitive shared definitions this screen needs."
+        },
+        "root": { "$ref": "#/$defs/node" }
+      }
+    },
+    "screenIndex": {
+      "type": "object",
+      "required": ["schemaVersion", "screens"],
+      "properties": { "schemaVersion": { "$ref": "#/$defs/schemaVersion" }, "screens": { "type": "array", "items": { "$ref": "#/$defs/screenInfo" } } }
+    },
+    "componentsFile": {
+      "type": "object",
+      "required": ["schemaVersion", "components", "componentSets"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "key", "name", "description", "remote", "setId", "variant", "dependencies", "definition"],
+            "properties": { "definition": { "anyOf": [{ "$ref": "#/$defs/node" }, { "type": "null" }] } }
+          }
+        },
+        "componentSets": { "type": "array" }
+      }
+    },
+    "tokensFile": {
+      "type": "object",
+      "required": ["schemaVersion", "collections", "variables", "styles"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "collections": { "type": "array" },
+        "variables": {
+          "type": "array",
+          "items": { "type": "object", "required": ["id", "name", "type", "collectionId", "valuesByMode", "resolvedDefault"], "properties": { "resolvedDefault": { "description": "Calculated: value in the collection's default mode with aliases followed." } } }
+        },
+        "styles": { "type": "array", "items": { "type": "object", "required": ["id", "name", "type"] } }
+      }
+    },
+    "assetsManifest": {
+      "type": "object",
+      "required": ["schemaVersion", "assets"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "role", "format", "file", "sourceNodeIds"],
+            "properties": { "id": { "type": "string", "description": "First 16 hex chars of the SHA-256 of the content." }, "role": { "enum": ["vector", "image-fill", "export-setting", "screenshot"] } }
+          }
+        }
+      }
+    },
+    "navigation": {
+      "type": "object",
+      "required": ["schemaVersion", "flows"],
+      "properties": { "schemaVersion": { "$ref": "#/$defs/schemaVersion" }, "flows": { "type": "array", "items": { "type": "object", "required": ["sourceNodeId", "sourceScreenId", "trigger", "actions"] } } }
+    },
+    "report": {
+      "type": "object",
+      "required": ["schemaVersion", "status", "counts", "unsupportedSummary", "skipped", "issues"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "status": { "enum": ["complete", "partial", "cancelled"] },
+        "issues": { "type": "array", "items": { "type": "object", "required": ["severity", "code", "nodeId", "message"], "properties": { "severity": { "enum": ["error", "warning", "info"] } } } }
+      }
+    },
+    "unresolved": {
+      "type": "object",
+      "required": ["schemaVersion", "items"],
+      "properties": { "items": { "type": "array", "items": { "type": "object", "required": ["code", "nodeId", "message", "action"] } } }
+    },
+    "manifest": {
+      "type": "object",
+      "required": ["schemaVersion", "generator", "source", "scope", "status", "features", "indexes", "files", "volatile"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/schemaVersion" },
+        "files": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }, "description": "SHA-256 of every other file, for stale-export detection." },
+        "volatile": { "type": "object", "required": ["exportedAt"], "description": "The only content that differs between exports of an unchanged design." }
+      }
+    }
+  }
+}

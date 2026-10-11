@@ -1,0 +1,150 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/Icon.astro';
+import CopyCode from '../components/CopyCode.astro';
+
+const title = 'How it works — F2F';
+const description = 'The four steps from a Figma design to a verified frontend: export, build a repo-aware brief, implement with any AI agent, and verify against the design to ±1 px.';
+
+const steps = [
+  {
+    n: '01', title: 'Export from Figma', where: 'Figma plugin · about 1 minute',
+    body: 'Select screens or a section and run the plugin. It reads an explicit list of properties through the Figma Plugin API and writes one folder: a compact outline per screen, the full node tree, shared components, tokens, assets and reference screenshots. Every file carries a SHA-256 hash.',
+    cmd: 'f2f validate f2f',
+  },
+  {
+    n: '02', title: 'Build a brief for your agent', where: 'CLI · under a second',
+    body: 'The CLI scans your repository read-only. It never opens .env or key files. It matches Figma components to your widgets, Figma colours and text styles to your tokens, and lists what to reuse, what to create, which assets to copy and which questions are still open.',
+    cmd: 'f2f build --feature "Sidebar" --repo .',
+  },
+  {
+    n: '03', title: 'Let your AI agent implement', where: 'Your editor · agent time',
+    body: 'The agent reads the brief plus one screen outline, about 17k tokens. It writes the screens using your existing code and tags each element with its Figma id so it can be measured.',
+    cmd: 'Read f2f/briefs/sidebar.md and follow it: implement the screens, tag the layers, run f2f verify and fix until it passes.',
+  },
+  {
+    n: '04', title: 'Verify against the design', where: 'CLI · about 5 seconds on web',
+    body: 'Verify measures the running app in Chrome or Edge, on an Android emulator, on an iOS simulator or in a Flutter host test. It compares every tagged box with Figma and writes a PASS/FAIL report, plus an app screenshot and a red-pixel diff image on web.',
+    cmd: 'f2f verify --screen 363 --url http://localhost:3000/profile',
+  },
+] as const;
+
+const checks = [
+  { name: 'Geometry', body: 'x, y, width and height of every tagged layer, relative to the screen root, ±1 px by default.' },
+  { name: 'Overflow', body: 'Text that is clipped or wraps when the design shows one line.' },
+  { name: 'Coverage', body: 'Figma layers with no tag in your code, so nothing goes unmeasured silently.' },
+  { name: 'Font metrics', body: 'Width-only differences on hugging text are warnings, not layout failures.' },
+  { name: 'Visual diff', body: 'On web: a pixel diff against the Figma screenshot, with alpha compositing.' },
+] as const;
+
+const howToJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'Turn a Figma design into a verified frontend with an AI coding agent',
+  description,
+  step: steps.map((s) => ({ '@type': 'HowToStep', position: Number(s.n), name: s.title, text: s.body })),
+};
+---
+
+<BaseLayout title={title} description={description}>
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify(howToJsonLd)} />
+
+  <article class="container section wrap">
+    <header class="page-head">
+      <span class="label">How it works</span>
+      <h1>From a Figma frame to a passing build, in four steps.</h1>
+      <p class="lede">Each step has one job and hands a file to the next. Nothing is uploaded and nothing is guessed.</p>
+    </header>
+
+    <div class="flow glass-pill" aria-hidden="true">
+      <span>Figma</span><Icon name="arrow" size={14} /><span>f2f/</span><Icon name="arrow" size={14} /><span>brief</span><Icon name="arrow" size={14} /><span>agent</span><Icon name="arrow" size={14} /><span>verify</span><Icon name="arrow" size={14} /><span class="pass">PASS</span>
+    </div>
+
+    <ol class="steps" role="list">
+      {steps.map((s) => (
+        <li class="glass-card step">
+          <span class="step-n gradient-text">{s.n}</span>
+          <div class="step-body">
+            <h2>{s.title}</h2>
+            <span class="where">{s.where}</span>
+            <p>{s.body}</p>
+            <pre><code>{s.cmd}</code></pre>
+          </div>
+        </li>
+      ))}
+    </ol>
+
+    <section class="checks">
+      <h2>What verify checks</h2>
+      <ul class="grid-auto" role="list">
+        {checks.map((c) => (
+          <li class="glass-card check">
+            <span class="tick"><Icon name="check" size={18} /></span>
+            <h3>{c.name}</h3>
+            <p>{c.body}</p>
+          </li>
+        ))}
+      </ul>
+      <p class="note">Colours, font family and weight, and corner radius are not compared as numbers yet. On web you see them in the diff image.</p>
+    </section>
+
+    <footer class="cta-row page-cta">
+      <a href="/docs" class="btn btn-primary">Start the quick start <Icon name="arrow" size={18} /></a>
+      <a href="/faq" class="btn btn-ghost">Read the FAQ</a>
+    </footer>
+  </article>
+  <CopyCode />
+</BaseLayout>
+
+<style>
+  .wrap { max-width: 980px; }
+
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-s);
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto var(--space-2xl);
+    padding: var(--space-s) var(--space-l);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+  }
+  .flow .pass { color: var(--pass); font-weight: 700; }
+
+  .steps { list-style: none; display: grid; gap: var(--space-m); }
+  .step {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: var(--space-l);
+    padding: var(--space-xl);
+  }
+  .step-n { font-family: var(--font-mono); font-size: 2rem; font-weight: 700; line-height: 1.1; }
+  .step-body { display: grid; gap: var(--space-s); }
+  .step h2 { font-size: 1.375rem; }
+  .where { font-size: 0.8125rem; font-weight: 600; color: var(--accent); }
+
+  pre {
+    margin-top: var(--space-s);
+    padding: var(--space-m) 84px var(--space-m) var(--space-m);
+    border-radius: var(--radius-m);
+    background: var(--glass-panel);
+    border: 1px solid var(--border-glass);
+  }
+  pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  .checks { margin-top: var(--space-3xl); }
+  .checks h2 { margin-bottom: var(--space-l); }
+  .checks ul { list-style: none; }
+  .check { padding: var(--space-l); display: grid; gap: var(--space-xs); align-content: start; }
+  .tick { color: var(--pass); }
+  .check h3 { font-size: 1.0625rem; }
+  .note { margin-top: var(--space-l); font-size: 0.9375rem; color: var(--text-secondary); }
+
+  .page-cta { margin-top: var(--space-3xl); }
+
+  @media (max-width: 640px) {
+    .step { grid-template-columns: 1fr; gap: var(--space-s); padding: var(--space-l); }
+  }
+</style>

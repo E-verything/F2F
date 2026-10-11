@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 12px/1.5 Inter, system-ui, sans-serif; margin: 0; padding: 16px; color: var(--figma-color-text); background: var(--figma-color-bg); }
+  h1 { font-size: 13px; margin: 0 0 12px; display: flex; align-items: center; gap: 6px; }
+  fieldset { border: 1px solid var(--figma-color-border); border-radius: 6px; margin: 0 0 12px; padding: 8px 12px; }
+  legend { padding: 0 4px; color: var(--figma-color-text-secondary); }
+  label { display: block; margin: 4px 0; }
+  .row { display: flex; gap: 8px; }
+  button { flex: 1; padding: 8px; border-radius: 6px; border: 0; font: inherit; cursor: pointer; }
+  #export { background: var(--figma-color-bg-brand); color: var(--figma-color-text-onbrand); }
+  #export:disabled { opacity: .5; cursor: default; }
+  #cancel { background: var(--figma-color-bg-secondary); color: var(--figma-color-text); }
+  progress { width: 100%; margin-top: 12px; }
+  #status { margin-top: 8px; color: var(--figma-color-text-secondary); word-break: break-word; }
+  .note { color: var(--figma-color-text-tertiary); font-size: 11px; margin-top: 12px; }
+</style>
+</head>
+<body>
+  <h1><img src="/*LOGO*/" alt="" width="20" height="20"> F2F export</h1>
+  <fieldset>
+    <legend>Scope</legend>
+    <label><input type="radio" name="scope" value="selection" checked> Selection (<span id="selcount">0</span> layers)</label>
+    <label><input type="radio" name="scope" value="page"> Current page</label>
+    <label><input type="radio" name="scope" value="all-pages"> All pages</label>
+  </fieldset>
+  <fieldset>
+    <legend>Options</legend>
+    <label><input type="checkbox" id="screenshots" checked> Reference screenshots (1x PNG per screen)</label>
+    <label><input type="checkbox" id="rest"> Include raw JSON_REST_V1 (debug, large)</label>
+  </fieldset>
+  <div class="row">
+    <button id="export">Export</button>
+    <button id="cancel" hidden>Cancel</button>
+  </div>
+  <progress id="bar" hidden></progress>
+  <div id="status"></div>
+  <p class="note">Runs locally. No network access; the ZIP is downloaded to your machine.</p>
+  <script>/*UI_SCRIPT*/</script>
+</body>
+</html>

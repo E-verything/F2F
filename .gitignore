@@ -1,0 +1,11 @@
+node_modules/
+dist/
+f2f/
+*.zip
+
+# Internal notes and tests; never published
+internal/
+tests/
+
+# Astro generated types
+.astro/

@@ -1,0 +1,157 @@
+---
+const rows = [
+  { id: 'title', name: 'Title', delta: 'Δy +8' },
+  { id: 'avatar', name: 'Avatar', delta: 'Δw −4 Δh −4' },
+  { id: 'button', name: 'Follow button', delta: 'Δw +24' },
+];
+---
+
+<div class="demo" data-diff data-state="before">
+  <div class="toggle glass-pill" role="group" aria-label="Show build state">
+    <button type="button" data-set="before" aria-pressed="true">First build</button>
+    <button type="button" data-set="after" aria-pressed="false">After fix</button>
+  </div>
+
+  <div class="stage">
+    <div class="phone glass-card" aria-hidden="true">
+      <span class="box figma title"></span>
+      <span class="box built title"><i>Title</i></span>
+      <span class="box figma avatar"></span>
+      <span class="box built avatar"></span>
+      <span class="box figma text1"></span>
+      <span class="box built text1 ok"></span>
+      <span class="box figma text2"></span>
+      <span class="box built text2 ok"></span>
+      <span class="box figma button"></span>
+      <span class="box built button"><i>Follow</i></span>
+    </div>
+
+    <div class="report glass-card">
+      <div class="report-head">
+        <code>verification/profile.md</code>
+        <span class="verdict" data-verdict>FAIL</span>
+      </div>
+      <ul role="list">
+        {rows.map((r) => (
+          <li class="row">
+            <span>#{r.id} {r.name}</span>
+            <span class="delta">{r.delta}</span>
+            <span class="ok-mark">±0</span>
+          </li>
+        ))}
+      </ul>
+      <div class="legend">
+        <span><i class="swatch figma"></i>Figma box</span>
+        <span><i class="swatch built"></i>Your build</span>
+        <span><i class="swatch off"></i>Off by more than 1 px</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-diff]').forEach((demo) => {
+    const verdict = demo.querySelector<HTMLElement>('[data-verdict]');
+    const buttons = demo.querySelectorAll<HTMLButtonElement>('[data-set]');
+    buttons.forEach((b) => b.addEventListener('click', () => {
+      const state = b.dataset.set ?? 'before';
+      demo.dataset.state = state;
+      buttons.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      if (verdict) verdict.textContent = state === 'after' ? 'PASS' : 'FAIL';
+    }));
+  });
+</script>
+
+<style>
+  .demo { display: grid; gap: var(--space-l); justify-items: center; }
+
+  .toggle { padding: 4px; gap: 4px; }
+  .toggle button {
+    min-height: 36px;
+    padding: 0 var(--space-m);
+    border-radius: var(--radius-pill);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-label);
+    transition: var(--morph);
+  }
+  .toggle button[aria-pressed='true'] { background: rgba(255, 255, 255, 0.12); color: var(--text-primary); }
+
+  .stage {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+    gap: var(--space-xl);
+    align-items: center;
+  }
+
+  /* Phone mock: positions are percentages of a 300×520 frame so it scales on narrow screens. */
+  .phone {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 300 / 520;
+    border-radius: 36px;
+    justify-self: center;
+  }
+
+  .box { position: absolute; border-radius: 8px; transition: var(--morph); }
+  .box i { position: absolute; inset: 0; display: grid; place-items: center; font-style: normal; font-size: 0.75rem; font-weight: 600; color: var(--text-primary); }
+  .figma { border: 1.5px dashed var(--accent-2); }
+  .built { background: rgba(255, 255, 255, 0.07); border: 1.5px solid var(--fail); box-shadow: 0 0 18px -6px var(--fail); }
+  .built.ok,
+  [data-state='after'] .built { border-color: rgba(52, 211, 153, 0.7); box-shadow: none; }
+
+  .figma.avatar,
+  .built.avatar { border-radius: 50%; }
+
+  .title { left: 10%; top: 9%; width: 55%; height: 6%; }
+  .avatar { left: 10%; top: 20%; width: 22%; aspect-ratio: 1; height: auto; }
+  .text1 { left: 10%; top: 38%; width: 80%; height: 4%; }
+  .text2 { left: 10%; top: 45%; width: 62%; height: 4%; }
+  .button { left: 10%; top: 80%; width: 50%; height: 8%; border-radius: var(--radius-pill); }
+
+  [data-state='before'] .built.title { transform: translateY(13px); }
+  [data-state='before'] .built.avatar { width: 20%; }
+  [data-state='before'] .built.button { width: 66%; }
+
+  .report { padding: var(--space-l); border-radius: var(--radius-l); font-size: 0.9375rem; }
+  .report-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-m);
+    padding-bottom: var(--space-m);
+    margin-bottom: var(--space-s);
+    border-bottom: 1px solid var(--border-glass);
+  }
+  .verdict { font-family: var(--font-mono); font-weight: 700; color: var(--fail); transition: var(--morph); }
+  [data-state='after'] .verdict { color: var(--pass); }
+
+  .report ul { list-style: none; }
+  .row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-m);
+    padding: var(--space-s) 0;
+    border-bottom: 1px dashed var(--border-glass);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    color: var(--text-label);
+  }
+  .delta { color: var(--fail); }
+  .ok-mark { display: none; color: var(--pass); }
+  [data-state='after'] .delta { display: none; }
+  [data-state='after'] .ok-mark { display: inline; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: var(--space-m); margin-top: var(--space-m); font-size: 0.8125rem; color: var(--text-secondary); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { display: inline-block; width: 14px; height: 10px; border-radius: 3px; }
+  .swatch.figma { border: 1.5px dashed var(--accent-2); }
+  .swatch.built { border: 1.5px solid rgba(52, 211, 153, 0.7); }
+  .swatch.off { border: 1.5px solid var(--fail); }
+
+  @media (max-width: 760px) {
+    .stage { grid-template-columns: 1fr; }
+    .phone { max-width: 260px; }
+  }
+</style>

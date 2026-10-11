@@ -1,0 +1,128 @@
+---
+// Numbers mirror the measured end-to-end run in docs/benchmark.md, so the demo never overstates results.
+const lines = [
+  { kind: 'cmd', text: 'f2f build --feature sidebar --repo .' },
+  { kind: 'out', text: '✓ briefs/sidebar.md · reuse · create · assets · verify steps' },
+  { kind: 'agent', text: 'agent › implementing 2 screens from briefs/sidebar.md' },
+  { kind: 'cmd', text: 'f2f verify --screen 363 --url localhost:8080' },
+  { kind: 'fail', text: 'FAIL  31/47 match · Icon Δw −3 · Chip Δh +1 · 14 more' },
+  { kind: 'agent', text: 'agent › fixing 16 layers from verification/363.md' },
+  { kind: 'cmd', text: 'f2f verify --screen 363 --url localhost:8080' },
+  { kind: 'pass', text: 'PASS  44/47 match · 2 font-metric warnings · diff 3.3%' },
+];
+---
+
+<div class="terminal glass-card" role="img" aria-label="Terminal demo: build a brief, the agent implements, verify fails with exact pixel offsets, the agent fixes, verify passes.">
+  <header class="bar">
+    <span class="light red"></span>
+    <span class="light amber"></span>
+    <span class="light green"></span>
+    <span class="title">~/your-app</span>
+    <span class="status" data-status>running</span>
+  </header>
+  <ol class="lines" data-lines>
+    {lines.map((l) => (
+      <li class={`line ${l.kind}`}>
+        {l.kind === 'cmd' && <span class="prompt">$</span>}
+        <span>{l.text}</span>
+      </li>
+    ))}
+  </ol>
+</div>
+
+<script>
+  const STEP_MS = 900;
+  const HOLD_MS = 3200;
+
+  document.querySelectorAll<HTMLElement>('.terminal').forEach((term) => {
+    const items = [...term.querySelectorAll<HTMLElement>('[data-lines] > li')];
+    const status = term.querySelector<HTMLElement>('[data-status]');
+    if (!items.length || !status) return;
+
+    const finish = () => {
+      items.forEach((li) => li.classList.add('shown'));
+      status.textContent = 'pass';
+      status.dataset.state = 'pass';
+    };
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return finish();
+
+    const run = () => {
+      items.forEach((li) => li.classList.remove('shown'));
+      status.textContent = 'running';
+      status.dataset.state = 'run';
+      items.forEach((li, i) => setTimeout(() => {
+        li.classList.add('shown');
+        if (li.classList.contains('fail')) { status.textContent = 'fail'; status.dataset.state = 'fail'; }
+        if (li.classList.contains('pass')) { status.textContent = 'pass'; status.dataset.state = 'pass'; }
+      }, i * STEP_MS));
+      setTimeout(run, items.length * STEP_MS + HOLD_MS);
+    };
+    run();
+  });
+</script>
+
+<style>
+  .terminal {
+    width: 100%;
+    padding: var(--space-l);
+    border-radius: var(--radius-l);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    box-shadow: var(--glass-highlight), 0 30px 80px -30px rgba(139, 108, 255, 0.45);
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding-bottom: var(--space-m);
+    margin-bottom: var(--space-m);
+    border-bottom: 1px solid var(--border-glass);
+  }
+  .light { width: 10px; height: 10px; border-radius: 50%; }
+  .red { background: var(--fail); }
+  .amber { background: var(--warn); }
+  .green { background: var(--pass); }
+  .title { margin-left: var(--space-s); color: var(--text-secondary); font-size: 0.75rem; }
+
+  .status {
+    margin-left: auto;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-glass);
+    background: var(--glass-panel);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-label);
+    transition: var(--morph);
+  }
+  .status[data-state='fail'] { color: var(--fail); border-color: rgba(255, 92, 108, 0.45); }
+  .status[data-state='pass'] { color: var(--pass); border-color: rgba(52, 211, 153, 0.45); }
+
+  .lines { list-style: none; display: grid; gap: 9px; min-height: 17.5em; }
+
+  .line {
+    display: flex;
+    gap: var(--space-s);
+    line-height: 1.45;
+    color: var(--text-label);
+    overflow-wrap: anywhere;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+  .line.shown { opacity: 1; transform: none; }
+
+  .prompt { color: var(--accent-2); flex-shrink: 0; }
+  .cmd { color: var(--text-primary); }
+  .agent { color: var(--accent); }
+  .fail { color: var(--fail); }
+  .pass { color: var(--pass); font-weight: 600; }
+
+  @media (max-width: 480px) {
+    .terminal { padding: var(--space-m); font-size: 0.75rem; }
+  }
+</style>

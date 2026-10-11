@@ -1,0 +1,43 @@
+---
+// Adds a copy button to every <pre> on the page; include once per page that shows commands.
+---
+
+<script>
+  document.querySelectorAll<HTMLPreElement>('pre').forEach((pre) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'copy-btn';
+    btn.textContent = 'Copy';
+    btn.setAttribute('aria-label', 'Copy code');
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(pre.querySelector('code')?.innerText ?? pre.innerText);
+        btn.textContent = 'Copied';
+      } catch {
+        btn.textContent = 'Select & copy';
+      }
+      setTimeout(() => (btn.textContent = 'Copy'), 1600);
+    });
+    pre.classList.add('has-copy');
+    pre.append(btn);
+  });
+</script>
+
+<style is:global>
+  pre.has-copy { position: relative; }
+  .copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-glass);
+    background: var(--glass-panel);
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-label);
+    transition: var(--morph);
+  }
+  .copy-btn:hover { color: var(--text-primary); border-color: var(--border-strong); }
+</style>

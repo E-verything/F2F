@@ -1,0 +1,73 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const title = 'FAQ — F2F';
+const description = 'Answers about F2F: what it does, which stacks and agents it supports, what it costs, what data leaves your machine and how accurate verification is.';
+
+const faqs = [
+  { q: 'What does F2F do?', a: 'It turns a Figma design into exact, structured context for an AI coding agent, maps that design to the components and tokens already in your repository, and then measures the built screen against the design so the agent can fix what does not match.' },
+  { q: 'Does it generate the code itself?', a: 'No. Your AI coding agent writes the code. F2F gives it exact facts and a repo-aware brief before, and a measured report after. That separation is what lets it work with any agent and any stack.' },
+  { q: 'Which frontend stacks are supported?', a: 'React, Next, Vue, Svelte and plain HTML on the web; Flutter on web, Android, iOS or as a host test; React Native and Jetpack Compose on Android; React Native and SwiftUI on iOS. Repo inspection currently understands Flutter and React/Next/Vue/Svelte projects best.' },
+  { q: 'Which AI agents does it work with?', a: 'Any agent that can read files in your repository and run a terminal command. The brief and reports are plain Markdown and JSON.' },
+  { q: 'What does it cost?', a: 'Nothing. It is open source under the MIT license. It needs no paid Figma plan, no paid API and no server. The Figma free plan works.' },
+  { q: 'Does my design or code leave my machine?', a: 'No. The Figma plugin has no network access. The CLI runs locally, reads your repository read-only and never opens env or key files. There is no telemetry.' },
+  { q: 'How accurate is it?', a: 'Exported values matched Figma\'s own JSON export with zero mismatches on a real file. Verification checks every tagged layer to ±1 px. In a measured run, one fix round driven by the report took a screen from 31 to 44 of 47 matching layers; the rest were font-rendering warnings.' },
+  { q: 'Does it check colours and fonts?', a: 'Not as numbers yet. Geometry, overflow and coverage are measured; on web, colour and font differences show in the red-pixel diff image. Numeric style checks are on the roadmap.' },
+  { q: 'What do I need installed?', a: 'Node 22 or newer and the Figma desktop app. For web checks, Chrome or Edge. For Android, adb. For iOS, idb. Nothing is downloaded for you.' },
+  { q: 'Does it handle responsive layouts?', a: 'One viewport per screen today. Breakpoints are reported as unknown rather than invented. Linking several widths of the same screen is on the roadmap.' },
+] as const;
+
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+};
+---
+
+<BaseLayout title={title} description={description}>
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
+
+  <article class="container section wrap">
+    <header class="page-head">
+      <span class="label">FAQ</span>
+      <h1>Questions developers ask.</h1>
+    </header>
+
+    <div class="list">
+      {faqs.map((f, i) => (
+        <details class="glass-card item" open={i < 2}>
+          <summary>
+            <h2>{f.q}</h2>
+            <span class="plus" aria-hidden="true">+</span>
+          </summary>
+          <p>{f.a}</p>
+        </details>
+      ))}
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .wrap { max-width: 820px; }
+  .list { display: grid; gap: var(--space-s); }
+  .item { border-radius: var(--radius-l); overflow: hidden; }
+  .item summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-m);
+    padding: var(--space-l) var(--space-xl);
+    cursor: pointer;
+    list-style: none;
+  }
+  .item summary::-webkit-details-marker { display: none; }
+  .item h2 { font-size: 1.0625rem; font-weight: 600; letter-spacing: -0.015em; }
+  .plus { font-size: 1.5rem; font-weight: 300; line-height: 1; color: var(--text-secondary); transition: var(--morph); }
+  .item[open] .plus { transform: rotate(45deg); color: var(--accent-2); }
+  .item p { padding: 0 var(--space-xl) var(--space-l); line-height: 1.65; }
+
+  @media (max-width: 640px) {
+    .item summary { padding: var(--space-m) var(--space-l); }
+    .item p { padding: 0 var(--space-l) var(--space-m); }
+  }
+</style>

@@ -1,0 +1,274 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import HeroTerminal from '../components/HeroTerminal.astro';
+import DiffDemo from '../components/DiffDemo.astro';
+import Icon from '../components/Icon.astro';
+import { SITE } from '../site';
+
+const title = `${SITE.name} — Figma to working frontend with any AI coding agent`;
+const description = 'Free, open-source, local-first. Export exact design values from Figma, give your AI agent a repo-aware brief, then measure the built screen against the design to ±1 px on web, Flutter, Android and iOS.';
+
+const parts = [
+  { icon: 'figma', step: '01', name: 'Figma plugin', where: 'In Figma desktop', body: 'Exports exact layout, colours, text, components, icons and reference screenshots as one portable folder. Nothing leaves your machine.' },
+  { icon: 'brief', step: '02', name: 'CLI: build', where: 'In your app repo', body: 'Reads your code read-only, maps the design to the components and tokens you already have, and writes a brief your agent follows.' },
+  { icon: 'agent', step: '03', name: 'Your AI agent', where: 'In your editor', body: 'Implements the screens from exact numbers instead of guessing from a screenshot, and tags each element with its Figma id.' },
+  { icon: 'ruler', step: '04', name: 'CLI: verify', where: 'Against the running app', body: 'Measures every tagged element and reports what is off, by how many pixels. The agent fixes it and runs verify again until PASS.' },
+] as const;
+
+const features = [
+  { icon: 'layers', title: 'Facts, not guesses', body: 'Values come from the Figma Plugin API. Each one is marked as source, calculated or inferred, so your agent never treats a guess as a spec.' },
+  { icon: 'code', title: 'Reuses your codebase', body: 'Finds your existing widgets, colour tokens, text styles, fonts and routes, and tells the agent to reuse them instead of duplicating.' },
+  { icon: 'diff', title: 'Measured, not claimed', body: 'Every layer is compared to ±1 px, with overflow, coverage and font-metric checks, plus a red-pixel diff image on web.' },
+  { icon: 'devices', title: 'Any frontend stack', body: 'React, Next, Vue, Svelte, HTML, Flutter, React Native, Compose and SwiftUI. Web, Android, iOS or a Flutter host test.' },
+  { icon: 'agent', title: 'Any AI agent', body: 'The output is plain Markdown and JSON. Any coding agent that can read files and run a command can follow the loop.' },
+  { icon: 'lock', title: 'Local-first and free', body: 'No server, no paid API, no telemetry. The plugin has no network access at all. MIT licensed.' },
+] as const;
+
+const platforms = [
+  { name: 'Web', detail: 'React · Next · Vue · Svelte · HTML', tag: 'data-figma-id' },
+  { name: 'Flutter', detail: 'Web, Android, iOS or host test', tag: 'Semantics identifier' },
+  { name: 'Android', detail: 'Flutter · React Native · Compose', tag: 'testTag / testID' },
+  { name: 'iOS', detail: 'Flutter · React Native · SwiftUI', tag: 'accessibilityIdentifier' },
+] as const;
+
+const softwareJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: SITE.name,
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Windows, macOS, Linux',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  license: 'https://opensource.org/licenses/MIT',
+  description,
+};
+---
+
+<BaseLayout title={title} description={description}>
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify(softwareJsonLd)} />
+
+  <section class="hero section">
+    <div class="container hero-grid">
+      <div class="hero-copy fade-up">
+        <span class="glass-pill"><span class="dot"></span>Open source · Local-first · Any stack</span>
+        <h1>Figma to frontend.<br /><span class="gradient-text">Measured, not guessed.</span></h1>
+        <p class="hero-sub">
+          Give your AI coding agent the exact design values and a brief that knows your codebase. Then check the built
+          screen against Figma, layer by layer, until it passes.
+        </p>
+        <div class="cta-row hero-ctas">
+          <a href="/docs" class="btn btn-primary">Get started <Icon name="arrow" size={18} /></a>
+          <a href="/how-it-works" class="btn btn-ghost">See how it works</a>
+        </div>
+      </div>
+      <div class="hero-visual fade-up">
+        <HeroTerminal />
+      </div>
+    </div>
+
+    <ul class="container stats" role="list">
+      <li><strong>±1 px</strong><span>geometry check per layer</span></li>
+      <li><strong>0</strong><span>value mismatches vs Figma's own JSON</span></li>
+      <li><strong>~17k</strong><span>tokens of context per screen</span></li>
+      <li><strong>0</strong><span>servers, keys or paid APIs</span></li>
+    </ul>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <header class="section-head">
+        <span class="label">The loop</span>
+        <h2>Three tools. One loop. Pixel-checked.</h2>
+        <p>A Figma plugin, a CLI and the AI agent you already use. Each does one job.</p>
+      </header>
+      <ol class="parts" role="list">
+        {parts.map((p) => (
+          <li class="glass-card hoverable part">
+            <span class="part-step">{p.step}</span>
+            <span class="part-icon"><Icon name={p.icon} /></span>
+            <h3>{p.name}</h3>
+            <span class="part-where">{p.where}</span>
+            <p>{p.body}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <header class="section-head">
+        <span class="label">Figma vs your build</span>
+        <h2>See exactly what does not match.</h2>
+        <p>
+          Verify compares every tagged element with its Figma box and writes a report your agent can act on: which layer,
+          which direction, how many pixels.
+        </p>
+      </header>
+      <DiffDemo />
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <header class="section-head">
+        <span class="label">Why it works</span>
+        <h2>Built for real codebases, not demos.</h2>
+      </header>
+      <div class="features">
+        {features.map((f) => (
+          <article class="glass-card hoverable feat">
+            <span class="part-icon"><Icon name={f.icon} /></span>
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <header class="section-head">
+        <span class="label">Platforms</span>
+        <h2>Verify where your app actually runs.</h2>
+      </header>
+      <ul class="platforms" role="list">
+        {platforms.map((p) => (
+          <li class="glass-card platform">
+            <h3>{p.name}</h3>
+            <p>{p.detail}</p>
+            <code>{p.tag}</code>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="glass-card cta-card">
+        <h2>Your next screen, in about 10 minutes.</h2>
+        <p>Free. Open source. Your designs and code never leave your machine.</p>
+        <div class="cta-row">
+          <a href="/docs" class="btn btn-primary">Read the quick start <Icon name="arrow" size={18} /></a>
+          {SITE.repoUrl && <a href={SITE.repoUrl} class="btn btn-ghost" target="_blank" rel="noopener"><Icon name="github" size={18} />View source</a>}
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero { padding-top: var(--space-2xl); }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: var(--space-3xl);
+    align-items: center;
+  }
+
+  .hero-copy h1 { margin: var(--space-l) 0; }
+  .hero-sub { max-width: 52ch; font-size: 1.125rem; margin-bottom: var(--space-xl); }
+  .hero-ctas { justify-content: flex-start; }
+  .hero-visual { min-width: 0; animation-delay: 0.12s; }
+
+  .stats {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-l);
+    margin-top: var(--space-3xl);
+    padding-top: var(--space-xl);
+    border-top: 1px solid var(--border-glass);
+  }
+  .stats li { display: grid; gap: 2px; }
+  .stats strong { font-size: clamp(1.375rem, 2.4vw, 1.875rem); letter-spacing: -0.03em; }
+  .stats span { font-size: 0.875rem; color: var(--text-secondary); }
+
+  .parts {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-l);
+  }
+
+  .part,
+  .feat {
+    position: relative;
+    padding: var(--space-xl);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-s);
+  }
+
+  .part-step {
+    position: absolute;
+    top: var(--space-l);
+    right: var(--space-l);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    color: var(--text-tertiary);
+  }
+
+  .part-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin-bottom: var(--space-s);
+    border-radius: var(--radius-m);
+    background: var(--glass-panel);
+    border: 1px solid var(--border-accent);
+    color: var(--accent-2);
+  }
+
+  .part-where {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-l);
+  }
+
+  .platforms {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+    gap: var(--space-l);
+  }
+  .platform { padding: var(--space-xl); display: grid; gap: var(--space-s); align-content: start; }
+  .platform code { justify-self: start; color: var(--accent-2); }
+
+  .cta-card {
+    padding: var(--space-3xl) var(--space-xl);
+    text-align: center;
+    display: grid;
+    justify-items: center;
+    gap: var(--space-l);
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(139, 108, 255, 0.22), transparent 70%),
+      var(--glass-bg);
+  }
+
+  @media (max-width: 1024px) {
+    .hero-grid { grid-template-columns: 1fr; }
+    .hero-copy { text-align: center; }
+    .hero-sub { margin-left: auto; margin-right: auto; }
+    .hero-ctas { justify-content: center; }
+    .hero-visual { max-width: 640px; width: 100%; margin: 0 auto; }
+    .parts { grid-template-columns: repeat(2, 1fr); }
+    .features { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 640px) {
+    .stats { grid-template-columns: 1fr 1fr; }
+    .parts { grid-template-columns: 1fr; }
+    .features { grid-template-columns: 1fr; }
+    .cta-card { padding: var(--space-2xl) var(--space-l); }
+  }
+</style>
