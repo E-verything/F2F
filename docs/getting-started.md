@@ -29,12 +29,94 @@ f2f --help
 
 In Figma desktop: **Plugins → Development → Import plugin from manifest…** → choose `packages/plugin/manifest.json` from this repo. The plugin then appears as **F2F**.
 
+## Prepare the Figma file (for designers)
+
+F2F reads structure and names straight from Figma. A well-organised file gives the AI agent exact context; a messy one makes it guess.
+
+1. **One feature = one Section.** F2F uses the section name as the feature name, so every screen of a feature belongs inside its section.
+2. **Give every section a clear, unique name.** For example, "Network" and "Network Error State" are better than names where one contains the other.
+3. **Name screens after what they show,** like "Network - Connections" or "Network - Sync Contacts", instead of "iPhone 13 & 14 - 386". Both the AI and the developer will understand the brief much faster.
+4. **Mark finished sections "Ready for dev",** so developers know which sections are final.
+
+## Find a feature's screens (for developers)
+
+- `f2f/screens/index.json` lists every screen with its `feature` (the section name). Search for `"feature": "Network"` with the quotes; a plain search for `Network` also matches other sections such as "Network error".
+- `f2f build --feature "Network"` matches the section name exactly, so the brief contains only that section's screens.
+- Give the agent the brief, not the whole `f2f/` folder. The brief already points to the right outlines, components, tokens and assets.
+
+## Copy-paste prompts for your AI agent
+
+Build the design system once, before any screen. If every feature builds its own buttons and colours, the codebase fills with duplicates.
+
+| When | Who | Prompt |
+|---|---|---|
+| Once per project | Lead developer | 1. Design system setup |
+| Per section | Any developer, after `f2f build` | 2. Build one feature |
+| `f2f verify` fails | Same developer | 3. Fix after verify |
+| Designer changed Figma | Lead developer | 4. Design update |
+
+### 1. Design system setup
+
+```
+You are setting up the design system for this app from the F2F export in ./f2f.
+Source of truth: f2f/DESIGN.md, f2f/tokens/tokens.json, f2f/components/components.json.
+
+Rules:
+- Use ONLY values from these files. Never invent a colour, size, font or spacing. If something is missing or unclear, list it under "Open questions" and stop on that item.
+- Check f2f/reports/unresolved-items.json first and list anything that affects the design system.
+
+Tasks:
+1. Read DESIGN.md sections "Implementation rules", "Figma → code rules" and "Tokens".
+2. Create one theme/token layer: every colour token, every text style, and the recurring spacing/radius values from "Observed values". Use the exact token names from DESIGN.md.
+3. From components.json, group the components by component set. For each set used by 2+ screens, create ONE reusable widget whose variants map to the Figma variant properties (e.g. Button: variant=primary/secondary, state=default/pressed/disabled). Skip one-off components; list them instead.
+4. Reuse anything that already exists in this repo before creating something new.
+5. Output: the files you created, a table "Figma component set → widget → file", and the open questions.
+Do not build any screens yet.
+```
+
+### 2. Build one feature
+
+Run `f2f build --feature "<section name>" --repo .` first, then:
+
+```
+Read f2f/briefs/<feature>.md and follow it exactly.
+
+Rules:
+- Use the existing theme tokens and shared widgets. Never hard-code a colour, font size or spacing that exists as a token. Never create a widget that already exists.
+- Every size, text and colour must come from the screen outlines in the brief. If a value is missing, add it to "Open questions" instead of guessing.
+- If a pattern repeats across these screens (list row, tab bar, header), build it once as a shared widget and reuse it.
+- Tag every element with its Figma id as the brief shows.
+- Run the verify command from the brief and fix until it passes.
+
+Output: files changed, widgets reused vs. newly created, verify result, open questions.
+```
+
+### 3. Fix after verify
+
+```
+Read f2f/verification/<screen>.md.
+Fix the listed differences, largest first. Fix the cause in the shared widget or the token when the same difference appears on several elements; do not patch each screen separately.
+Do not change any value that is not listed. Re-run verify until it passes, then summarise what you changed and why.
+```
+
+### 4. Design update
+
+```
+A new F2F export is in ./f2f. Compare it with the current theme and shared widgets.
+1. List changed tokens (old → new) and changed component variants.
+2. Update tokens and shared widgets first, so every screen picks up the change.
+3. Then rebuild only the affected features with `f2f build --feature <name>` and verify them.
+Do not touch features whose screens did not change.
+```
+
+Check the "Figma component set → widget" table from prompt 1 before the team starts on features: every later prompt reuses what it creates.
+
 ## The workflow per feature (about 7 minutes plus agent time)
 
 ### Step 1: Export from Figma (1 min)
 
 1. Select the screens (or one Section) you want to build.
-2. Run **Plugins → Development → F2F** → **Export**. Keep **Reference screenshots** ticked.
+2. Run **Plugins → Development → F2F** → **Export**. Keep **Reference screenshots** ticked. Leave **Include raw JSON_REST_V1** off: it is a large debug dump that slows the export and adds nothing the agent needs.
 3. Unzip the ZIP into the root of **your app** repo, so `your-app/f2f/` exists.
 4. Run `f2f validate f2f`. It should report no errors.
 
@@ -50,9 +132,7 @@ This writes `f2f/briefs/<feature>.md`. It lists the components and tokens you al
 
 ### Step 3: Let the AI agent implement (agent time)
 
-Paste this into your agent:
-
-> Read `f2f/briefs/<feature>.md` and follow it: implement the screens, tag the layers, run `f2f verify` and fix until it passes.
+Paste prompt 2 from [Copy-paste prompts for your AI agent](#copy-paste-prompts-for-your-ai-agent) into your agent. Set up the design system with prompt 1 first if this is the project's first feature.
 
 ### Step 4: Verify the build against Figma (1 to 2 min)
 

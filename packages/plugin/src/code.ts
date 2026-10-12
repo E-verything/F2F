@@ -1,5 +1,4 @@
-import { buildPackage } from '../../core/src/package';
-import { extract, type ExtractOptions } from './extract';
+import { callStats, extract, type ExtractOptions } from './extract';
 
 const UI_SIZE = { width: 360, height: 420 };
 
@@ -23,11 +22,16 @@ figma.ui.onmessage = async (msg: { type: 'export'; options: ExtractOptions } | {
       cancelled: () => cancelRequested,
     });
     const t1 = Date.now();
-    figma.ui.postMessage({ type: 'progress', message: 'Building package', done: 0, total: 0 });
-    const files = buildPackage(snap, { exportedAt: new Date().toISOString(), timing: { extractMs: t1 - t0 } });
-    const timing = { extractMs: t1 - t0, packageMs: Date.now() - t1 };
-    figma.ui.postMessage({ type: 'done', files, status: snap.status, timing, fileName: snap.file.name });
+    console.log(`[F2F] extract done in ${t1 - t0} ms: ${snap.assets.length} assets, ${snap.components.length} components, status ${snap.status}`);
+    for (const [what, s] of Object.entries(callStats)) console.log(`[F2F]   ${what}: ${s.count} calls, ${s.ms} ms total, ${s.timeouts} timeouts`);
+    console.log(`[F2F]   raw JSON_REST_V1 screens: ${Object.keys(snap.restJson ?? {}).length}`);
+    // Packaging runs in the UI iframe: the same buildPackage took 5+ min in this sandbox vs ~14 s on a JIT engine.
+    console.log('[F2F] sending snapshot to UI…');
+    const t2 = Date.now();
+    figma.ui.postMessage({ type: 'snapshot', snap, extractMs: t1 - t0 });
+    console.log(`[F2F] postMessage returned after ${Date.now() - t2} ms`);
   } catch (e) {
+    console.error('[F2F] export failed', e);
     figma.ui.postMessage({ type: 'error', message: e instanceof Error ? e.message : String(e) });
   } finally {
     running = false;

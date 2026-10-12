@@ -42,6 +42,19 @@ const YIELD_EVERY_NODES = 200;
 const EXPORT_FORMATS: Record<string, RawAsset['format']> = { SVG: 'svg', PNG: 'png', JPG: 'jpg', PDF: 'pdf' };
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
+const CALL_TIMEOUT_MS = 60_000;
+// Figma API calls can hang forever on broken nodes (e.g. errored component sets); fail them so the export moves on.
+// Per-call totals, logged at the end, so a slow export shows which Figma call costs the time.
+export const callStats: Record<string, { count: number; ms: number; timeouts: number }> = {};
+const withTimeout = <T>(p: Promise<T>, what: string): Promise<T> => {
+  const s = (callStats[what] ??= { count: 0, ms: 0, timeouts: 0 });
+  const t0 = Date.now();
+  s.count++;
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => (s.timeouts++, reject(new Error(`${what} timed out after ${CALL_TIMEOUT_MS / 1000}s`))), CALL_TIMEOUT_MS);
+    p.then((v) => (clearTimeout(t), resolve(v)), (e) => (clearTimeout(t), reject(e))).finally(() => (s.ms += Date.now() - t0));
+  });
+};
 const assetId = (data: Uint8Array | string) => sha256(typeof data === 'string' ? utf8(data) : data).slice(0, 16);
 
 export function plain(v: unknown): unknown {
@@ -81,9 +94,17 @@ class Extractor {
 
   constructor(private opts: ExtractOptions, private hooks: ExtractHooks) {}
 
+  private stage = { message: '', done: 0, total: 0 };
+
+  step(message: string, done: number, total: number) {
+    this.stage = { message, done, total };
+    this.hooks.progress(`${message} · ${this.count} layers read`, done, total);
+  }
+
   private async checkpoint() {
     if (++this.count % YIELD_EVERY_NODES === 0) {
-      this.hooks.progress(`Read ${this.count} layers`, this.count, 0);
+      // Keep the stage label so long stages still show what is being read.
+      this.hooks.progress(`${this.stage.message} · ${this.count} layers read`, this.stage.done, this.stage.total);
       await tick();
     }
     if (this.hooks.cancelled()) this.cancelled = true;
@@ -150,14 +171,21 @@ class Extractor {
     if (node.type === 'INSTANCE') {
       let main: ComponentNode | null = null;
       try {
-        main = await node.getMainComponentAsync();
+        main = await withTimeout(node.getMainComponentAsync(), 'getMainComponentAsync');
       } catch (e) {
         (raw.issues ??= []).push({ nodeId: node.id, property: 'mainComponent', message: String(e) });
       }
       if (main && !this.components.has(main.id)) this.pendingComponents.set(main.id, main);
+      // Figma throws here when the instance's component set has errors (e.g. duplicate variants).
+      let componentProperties: Record<string, unknown> | null = null;
+      try {
+        componentProperties = (plain(node.componentProperties) as Record<string, unknown>) ?? null;
+      } catch (e) {
+        (raw.issues ??= []).push({ nodeId: node.id, property: 'componentProperties', message: String(e) });
+      }
       raw.instance = {
         mainComponentId: main?.id ?? null,
-        componentProperties: (plain(node.componentProperties) as Record<string, unknown>) ?? null,
+        componentProperties,
         overrides: node.overrides.map((o) => ({ id: o.id, overriddenFields: [...o.overriddenFields] })),
       };
     }
@@ -167,7 +195,10 @@ class Extractor {
       for (const setting of node.exportSettings) {
         try {
           const format = EXPORT_FORMATS[setting.format] ?? 'bin';
-          const data = setting.format === 'SVG' ? await node.exportAsync({ ...setting, format: 'SVG_STRING' } as ExportSettingsSVGString) : await node.exportAsync(setting);
+          const data = await withTimeout<Uint8Array | string>(
+            setting.format === 'SVG' ? node.exportAsync({ ...setting, format: 'SVG_STRING' } as ExportSettingsSVGString) : node.exportAsync(setting),
+            `export ${setting.format}`,
+          );
           (raw.assetIds ??= []).push(this.addAsset(data, format, 'export-setting', node.id));
         } catch (e) {
           (raw.issues ??= []).push({ nodeId: node.id, property: 'exportSettings', message: String(e) });
@@ -185,7 +216,7 @@ class Extractor {
 
     if (!isRoot && !raw.assetRole && raw.visible && this.isVectorRoot(node)) {
       try {
-        const svg = await node.exportAsync({ format: 'SVG_STRING' });
+        const svg = await withTimeout(node.exportAsync({ format: 'SVG_STRING' }), 'export SVG');
         raw.assetIds = [this.addAsset(svg, 'svg', 'vector', node.id)];
         raw.assetRole = 'vector';
       } catch (e) {
@@ -204,9 +235,17 @@ class Extractor {
     } catch (e) {
       this.issues.push({ nodeId: main.id, property: 'definition', message: String(e) });
     }
+    let variantProperties: Record<string, string> | null = null;
+    if (set) {
+      try {
+        variantProperties = plain(main.variantProperties) as Record<string, string>;
+      } catch (e) {
+        this.issues.push({ nodeId: main.id, property: 'variantProperties', message: String(e) });
+      }
+    }
     this.components.set(main.id, {
       id: main.id, key: main.key ?? null, name: main.name, description: main.description ?? '', remote: main.remote,
-      setId: set?.id ?? null, variantProperties: set ? (plain(main.variantProperties) as Record<string, string>) : null, definition,
+      setId: set?.id ?? null, variantProperties, definition,
       propertyDefinitions: set ? null : this.propertyDefinitions(main),
     });
     if (set && !this.componentSets.has(set.id)) {
@@ -251,7 +290,7 @@ class Extractor {
     const raw = await this.readNode(node, true);
     if (this.opts.screenshots && !this.cancelled) {
       try {
-        const png = await node.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 1 } });
+        const png = await withTimeout(node.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 1 } }), 'screenshot');
         this.addAsset(png, 'png', 'screenshot', node.id);
       } catch (e) {
         this.issues.push({ nodeId: node.id, property: 'screenshot', message: String(e) });
@@ -259,7 +298,7 @@ class Extractor {
     }
     if (this.opts.restJson && !this.cancelled) {
       try {
-        this.restJson[node.id] = await node.exportAsync({ format: 'JSON_REST_V1' });
+        this.restJson[node.id] = await withTimeout(node.exportAsync({ format: 'JSON_REST_V1' }), 'JSON_REST_V1');
       } catch (e) {
         this.issues.push({ nodeId: node.id, property: 'JSON_REST_V1', message: String(e) });
       }
@@ -291,6 +330,7 @@ function screenCandidates(nodes: readonly SceneNode[], page: PageNode, selection
 }
 
 export async function extract(opts: ExtractOptions, hooks: ExtractHooks): Promise<RawSnapshot> {
+  for (const k of Object.keys(callStats)) delete callStats[k];
   const ex = new Extractor(opts, hooks);
   const pages: RawPage[] = [];
   const pageList = opts.scope === 'all-pages' ? [...figma.root.children] : [figma.currentPage];
@@ -299,36 +339,44 @@ export async function extract(opts: ExtractOptions, hooks: ExtractHooks): Promis
 
   for (const [i, page] of pageList.entries()) {
     if (ex.cancelled) break;
-    hooks.progress(`Loading page "${page.name}" (${i + 1}/${pageList.length})`, i, pageList.length);
+    const pageLabel = `Page ${i + 1}/${pageList.length} "${page.name}"`;
+    ex.step(`${pageLabel}: loading`, i, pageList.length);
     await page.loadAsync();
     const sources = opts.scope === 'selection' ? figma.currentPage.selection : page.children;
     const { roots, skipped } = screenCandidates(sources, page, opts.scope === 'selection');
     const rawPage: RawPage = { id: page.id, name: page.name, roots: [], skipped };
-    for (const r of roots) {
+    for (const [j, r] of roots.entries()) {
       if (ex.cancelled) break;
-      hooks.progress(`Reading "${r.node.name}"`, i, pageList.length);
+      ex.step(`${pageLabel}: screen ${j + 1}/${roots.length} "${r.node.name}"`, i + j / roots.length, pageList.length);
       rawPage.roots.push(await ex.root(r.node, r.feature, r.kind));
     }
     pages.push(rawPage);
   }
 
+  // Total grows as components reveal nested instances, so it is done + still queued.
+  let componentsDone = 0;
   while (ex.pendingComponents.size && !ex.cancelled) {
     const [id, main] = ex.pendingComponents.entries().next().value as [string, ComponentNode];
     ex.pendingComponents.delete(id);
     if (ex.components.has(id)) continue;
-    hooks.progress(`Reading component "${main.name}"`, 0, 0);
+    const total = componentsDone + ex.pendingComponents.size + 1;
+    ex.step(`Component ${componentsDone + 1}/${total} "${main.parent?.type === 'COMPONENT_SET' ? `${main.parent.name} / ` : ''}${main.name}"`, componentsDone, total);
     await ex.readComponent(main);
+    componentsDone++;
   }
 
-  hooks.progress('Reading variables and styles', 0, 0);
+  console.log(`[F2F] components read: ${componentsDone}`);
+  ex.step('Reading variables and styles', 0, 0);
   const styles = await readStyles(ex);
   const { variables, collections } = await readVariables(ex);
 
-  hooks.progress('Reading images', 0, 0);
+  let imagesDone = 0;
   for (const [hash, nodeIds] of ex.imageHashes) {
     if (ex.cancelled) break;
+    ex.step(`Image ${++imagesDone}/${ex.imageHashes.size}`, imagesDone - 1, ex.imageHashes.size);
     try {
-      const bytes = await figma.getImageByHash(hash)?.getBytesAsync();
+      const img = figma.getImageByHash(hash);
+      const bytes = img && (await withTimeout(img.getBytesAsync(), 'image bytes'));
       if (!bytes) throw new Error('image not found');
       const asset = ex.assets.get(ex.addAsset(bytes, imageFormat(bytes), 'image-fill', nodeIds[0] ?? '', hash))!;
       asset.sourceNodeIds = [...new Set([...asset.sourceNodeIds, ...nodeIds])].filter(Boolean);
