@@ -13,11 +13,13 @@ CLI: packages/cli/src/index.ts ── validate <dir> (schema, hashes, cross-refe
 ```
 f2f build:  packages/cli/src/repo/inspect.ts (read-only scan, never .env/keys) ─► packages/cli/src/repo/compile.ts ─► briefs/<feature>.md (+ packages/core/src/guide.ts rules)
 f2f verify: runtime measurements ─► packages/cli/src/verify/compare.ts ─► verification/<screen>.md/.json
-   web / Flutter web : packages/cli/src/verify/web.ts     Chrome DevTools protocol over Node's WebSocket; data-figma-id or flt-semantics-identifier
+   web / Flutter web : packages/cli/src/verify/web.ts     Chrome DevTools protocol over Node's WebSocket; data-figma-id or flt-semantics-identifier;
+                       also computed styles, loaded font faces, and a reload at 375 px for the small-screen check
    Android           : packages/cli/src/verify/mobile.ts  adb uiautomator dump (px → dp via wm density)
    iOS               : packages/cli/src/verify/mobile.ts  idb ui describe-all (points)
    Flutter (host)    : packages/cli/templates/flutter/f2f_probe.dart → JSON → --measurements
    visual            : packages/cli/src/verify/png.ts     dependency-free PNG codec, alpha-composited diff vs the Figma screenshot
+   code rules        : packages/cli/src/verify/code.ts    source scan for computed Figma ids and raw two-decimal box sizes
 ```
 
 Comparison is relative to the measured screen root, so page padding, centring or a device status bar do not count as errors. Boxes clipped by a clipping ancestor are accepted (Flutter semantics and native accessibility report clipped rects). Hugging text that differs only in width is a font-metric warning, not a layout failure. Concrete mismatches decide FAIL before missing coverage decides INCOMPLETE.

@@ -14,7 +14,7 @@ const faqs = [
   { q: 'How accurate is it?', a: 'Exported values matched Figma\'s own JSON export with zero mismatches on a real file. Verification checks every tagged layer to ±1 px. In a measured run, one fix round driven by the report took a screen from 31 to 44 of 47 matching layers; the rest were font-rendering warnings.' },
   { q: 'Does it check colours and fonts?', a: 'Yes, on web, as numbers: font family, weight, italic, size, text colour, background and corner radius of every tagged layer are compared with the Figma values, and fonts the browser fakes because their file is not loaded are reported. On Android and iOS this is not measured yet, so check colours and fonts by eye.' },
   { q: 'What do I need installed?', a: 'Node 22 or newer and the Figma desktop app. For web checks, Chrome or Edge. For Android, adb. For iOS, idb. Nothing is downloaded for you.' },
-  { q: 'Does it handle responsive layouts?', a: 'One viewport per screen today. Breakpoints are reported as unknown rather than invented. Linking several widths of the same screen is on the roadmap.' },
+  { q: 'Does it handle responsive layouts?', a: 'Partly. Each screen is measured at its design width, and on web verify also loads the page at 375 px and fails if it scrolls sideways or cuts off content. The brief tells the agent to build fluid layouts that stack and wrap. Breakpoints are not invented: linking several Figma widths of the same screen is on the roadmap.' },
 ] as const;
 
 const faqJsonLd = {

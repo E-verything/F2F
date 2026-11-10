@@ -15,7 +15,7 @@ export interface ExtractHooks {
   cancelled(): boolean;
 }
 
-export const PLUGIN = { name: 'f2f', version: '0.1.0' };
+export const PLUGIN = { name: 'f2f', version: '0.1.1' };
 
 // Explicit property whitelist; read only when present on the node. Anything here that normalize does not handle is reported as unsupported, never dropped.
 const NODE_PROPS = [
