@@ -1,6 +1,6 @@
 {
   "name": "f2f",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "F2F: local-first Figma to frontend for any AI coding agent",
   "license": "MIT",
   "private": true,

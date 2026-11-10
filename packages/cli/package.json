@@ -1,6 +1,6 @@
 {
   "name": "f2f-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "F2F: turn a Figma export into a repo-aware brief for any AI coding agent, then measure the built screen against the design.",
   "license": "MIT",
   "type": "module",
