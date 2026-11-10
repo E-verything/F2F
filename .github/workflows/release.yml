@@ -35,5 +35,7 @@ jobs:
       # Trusted Publishing needs npm 11.5.1 or newer; Node 22 ships npm 10.
       - if: steps.version.outputs.publish == 'true'
         run: npm install -g npm@latest
+      # The root package.json has no workspaces, so publish from the package folder.
       - if: steps.version.outputs.publish == 'true'
-        run: npm publish -w packages/cli --access public
+        working-directory: packages/cli
+        run: npm publish --access public

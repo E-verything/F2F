@@ -98,7 +98,7 @@ f2f/
 git clone https://github.com/E-verything/F2F.git && cd F2F
 npm install
 npm run check          # type-check, tests, build
-npm link -w packages/cli   # use your local build as the f2f command
+npm link               # use your local build as the f2f command
 ```
 
 To try plugin changes, import `packages/plugin/manifest.json` in Figma desktop via Plugins → Development → Import plugin from manifest.
