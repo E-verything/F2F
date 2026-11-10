@@ -103,6 +103,11 @@ npm link -w packages/cli   # use your local build as the f2f command
 
 To try plugin changes, import `packages/plugin/manifest.json` in Figma desktop via Plugins → Development → Import plugin from manifest.
 
+**Releasing**
+
+- CLI: bump `version` in `packages/cli/package.json` and push to `main`. The Release CLI workflow publishes it to npm (npm Trusted Publishing, no token).
+- Figma plugin (only when `packages/plugin` or `packages/core` changed): Figma has no publish API, so it is manual. Run `npm run check`, export a real file with the development plugin and run `f2f validate f2f` on it, then in Figma desktop open the plugin's Community page → Publish new version.
+
 ## Dependencies
 
 | Package | Use | License |

@@ -1,0 +1,39 @@
+name: Release CLI
+
+# Publishes f2f-cli to npm when main carries a version that npm does not have yet.
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/cli/**
+      - packages/core/**
+
+permissions:
+  contents: read
+  id-token: write # npm Trusted Publishing (no token stored in GitHub)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Skip if this version is already on npm
+        id: version
+        run: |
+          v=$(node -p "require('./packages/cli/package.json').version")
+          if npm view "f2f-cli@$v" version >/dev/null 2>&1; then echo "publish=false" >> "$GITHUB_OUTPUT"; else echo "publish=true" >> "$GITHUB_OUTPUT"; fi
+          echo "f2f-cli $v"
+      - if: steps.version.outputs.publish == 'true'
+        run: npm ci
+      - if: steps.version.outputs.publish == 'true'
+        run: npm run typecheck && npm run build
+      # Trusted Publishing needs npm 11.5.1 or newer; Node 22 ships npm 10.
+      - if: steps.version.outputs.publish == 'true'
+        run: npm install -g npm@latest
+      - if: steps.version.outputs.publish == 'true'
+        run: npm publish -w packages/cli --access public
