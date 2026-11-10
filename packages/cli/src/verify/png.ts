@@ -8,6 +8,7 @@ const SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const CHANNELS: Record<number, number> = { 0: 1, 2: 3, 4: 2, 6: 4 };
 // A pixel counts as different when any channel differs by more than this (absorbs anti-aliasing noise).
 const CHANNEL_THRESHOLD = 32;
+const EDGE_SLACK_PX = 1;
 
 export function decodePng(buf: Uint8Array): Image {
   const b = Buffer.from(buf);
@@ -89,10 +90,20 @@ export function diffImages(design: Image, app: Image): { ratio: number; diff: Im
   const width = Math.min(design.width, app.width), height = Math.min(design.height, app.height);
   const diff = { width, height, data: new Uint8Array(width * height * 4) };
   let bad = 0;
+  const same = (a: Image, ai: number, b: Image, bi: number) => [0, 1, 2].every((c) => Math.abs(overWhite(a, ai, c) - overWhite(b, bi, c)) <= CHANNEL_THRESHOLD);
+  // Font engines anti-alias glyph edges differently and place them up to a pixel apart; a pixel that matches its neighbour in the other image is not a real difference.
+  const matchesNear = (a: Image, ai: number, b: Image, x: number, y: number) => {
+    for (let dy = -EDGE_SLACK_PX; dy <= EDGE_SLACK_PX; dy++)
+      for (let dx = -EDGE_SLACK_PX; dx <= EDGE_SLACK_PX; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && ny >= 0 && nx < width && ny < height && same(a, ai, b, (ny * b.width + nx) * 4)) return true;
+      }
+    return false;
+  };
   for (let y = 0; y < height; y++)
     for (let x = 0; x < width; x++) {
       const i = (y * design.width + x) * 4, j = (y * app.width + x) * 4, o = (y * width + x) * 4;
-      const differs = [0, 1, 2].some((c) => Math.abs(overWhite(design, i, c) - overWhite(app, j, c)) > CHANNEL_THRESHOLD);
+      const differs = !same(design, i, app, j) && !(matchesNear(design, i, app, x, y) && matchesNear(app, j, design, x, y));
       if (differs) { bad++; diff.data.set([255, 0, 0, 255], o); }
       else { const g = (overWhite(app, j, 0) + overWhite(app, j, 1) + overWhite(app, j, 2)) / 3; diff.data.set([g, g, g, 70], o); }
     }

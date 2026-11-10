@@ -28,6 +28,15 @@ export function findChrome(): string | null {
 
 // Runs in the page: Figma ids come from data-figma-id (web) or Flutter's Semantics(identifier: 'figma:<id>').
 const COLLECT = `(() => {
+  // A web font family with no face for this style/weight is faked by the browser (slanted or thickened); system fonts are not checked.
+  const fontFaceLoaded = (family, style, weight) => {
+    const faces = document.fonts ? [...document.fonts].filter((f) => f.family.replace(/^["']|["']$/g, '') === family) : [];
+    if (!faces.length) return true;
+    return faces.some((f) => {
+      const [lo, hi = lo] = String(f.weight).split(' ').map(Number);
+      return f.status === 'loaded' && (f.style === 'normal') === (style === 'normal') && weight >= lo && weight <= hi;
+    });
+  };
   document.querySelector('flt-semantics-placeholder')?.click();
   const out = {};
   const els = document.querySelectorAll('[data-figma-id], [flt-semantics-identifier^="figma:"]');
@@ -35,10 +44,25 @@ const COLLECT = `(() => {
     const id = el.getAttribute('data-figma-id') ?? el.getAttribute('flt-semantics-identifier').slice(6);
     const r = el.getBoundingClientRect();
     const m = { x: r.left + scrollX, y: r.top + scrollY, width: r.width, height: r.height };
-    if (el.children.length === 0 && el.textContent && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)) { m.overflow = true; m.text = el.textContent.trim().slice(0, 80); }
+    if (el.children.length === 0 && el.textContent && (el.scrollWidth > el.clientWidth + 1 || (getComputedStyle(el).overflowY !== 'visible' && el.scrollHeight > el.clientHeight + 1))) { m.overflow = true; m.text = el.textContent.trim().slice(0, 80); }
+    if (el.hasAttribute('data-figma-id')) {
+      const s = getComputedStyle(el);
+      const fam = s.fontFamily.split(',')[0].trim().replace(/^["']|["']$/g, '');
+      m.style = { fontFamily: s.fontFamily, fontWeight: Number(s.fontWeight), fontStyle: s.fontStyle, fontSize: parseFloat(s.fontSize), color: s.color, background: s.backgroundColor, radius: parseFloat(s.borderTopLeftRadius) || 0,
+        fontLoaded: fontFaceLoaded(fam, s.fontStyle, Number(s.fontWeight)), hasText: !!el.textContent.trim() };
+    }
     out[id] = m;
   }
-  return JSON.stringify({ count: els.length, nodes: out });
+  // Faked fonts anywhere on the page, tagged or not: every element that draws its own text.
+  const faked = new Map();
+  for (const el of document.querySelectorAll('body *')) {
+    if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+    const s = getComputedStyle(el);
+    const fam = s.fontFamily.split(',')[0].trim().replace(/^["']|["']$/g, '');
+    const key = s.fontStyle + ' ' + s.fontWeight + ' ' + fam;
+    if (!faked.has(key) && !fontFaceLoaded(fam, s.fontStyle, Number(s.fontWeight))) faked.set(key, key + ': ' + el.textContent.trim().slice(0, 30));
+  }
+  return JSON.stringify({ count: els.length, nodes: out, fakedFonts: [...faked.values()].slice(0, 10) });
 })()`;
 
 class Cdp {
@@ -70,7 +94,18 @@ class Cdp {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export interface WebMeasureOptions { url: string; viewport: { width: number; height: number }; rootId: string; waitMs?: number; screenshot?: boolean; chromePath?: string }
+export interface WebMeasureOptions { url: string; viewport: { width: number; height: number }; rootId: string; waitMs?: number; screenshot?: boolean; chromePath?: string; narrowWidth?: number }
+
+// Runs in the page at the narrow width: text and images past the right edge are cut off or scroll sideways; empty decorations are ignored.
+const NARROW = `(() => {
+  const w = document.documentElement.clientWidth;
+  const cut = [...document.querySelectorAll('body *')].filter((el) => {
+    const r = el.getBoundingClientRect();
+    const content = el.tagName === 'IMG' || el.tagName === 'svg' || (el.children.length === 0 && el.textContent.trim());
+    return content && r.width > 0 && r.right > w + 1;
+  }).slice(0, 10).map((el) => (el.closest('[data-figma-id]')?.getAttribute('data-figma-id') ?? '') + ' ' + (el.textContent.trim().slice(0, 40) || el.tagName.toLowerCase()));
+  return JSON.stringify({ width: w, scrollWidth: document.documentElement.scrollWidth, cutOff: cut });
+})()`;
 
 export async function measureWeb(o: WebMeasureOptions): Promise<{ measurements: Measurements; screenshot: Buffer | null }> {
   const chrome = o.chromePath ?? findChrome();
@@ -93,13 +128,13 @@ export async function measureWeb(o: WebMeasureOptions): Promise<{ measurements: 
     const cdp = new Cdp(ws);
     const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
-    // The page is given room around the design frame so a centred/padded root is not squeezed.
-    await cdp.send('Emulation.setDeviceMetricsOverride', { width: o.viewport.width, height: o.viewport.height, deviceScaleFactor: 1, mobile: false }, sessionId);
+    // Integer metrics: Chrome rejects fractional sizes, and design heights are often fractional.
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: Math.ceil(o.viewport.width), height: Math.ceil(o.viewport.height), deviceScaleFactor: 1, mobile: false }, sessionId);
     await cdp.send('Page.enable', {}, sessionId);
     const loaded = cdp.once('Page.loadEventFired', READY_TIMEOUT_MS);
     await cdp.send('Page.navigate', { url: o.url }, sessionId);
     await loaded;
-    let result: { count: number; nodes: Measurements['nodes'] } = { count: 0, nodes: {} };
+    let result: { count: number; nodes: Measurements['nodes']; fakedFonts?: string[] } = { count: 0, nodes: {} };
     let last = -1;
     const deadline = Date.now() + READY_TIMEOUT_MS;
     // Flutter builds its semantics DOM asynchronously; wait until the tagged count stops changing.
@@ -120,10 +155,19 @@ export async function measureWeb(o: WebMeasureOptions): Promise<{ measurements: 
       const shot = await cdp.send('Page.captureScreenshot', { format: 'png', clip, captureBeyondViewport: true }, sessionId);
       screenshot = Buffer.from(shot.data, 'base64');
     }
+    let narrow: Measurements['narrow'];
+    if (o.narrowWidth) {
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width: o.narrowWidth, height: 800, deviceScaleFactor: 1, mobile: false }, sessionId);
+      const reloaded = cdp.once('Page.loadEventFired', READY_TIMEOUT_MS);
+      await cdp.send('Page.navigate', { url: o.url }, sessionId);
+      await reloaded;
+      await sleep(o.waitMs ?? 1000);
+      narrow = JSON.parse((await cdp.send('Runtime.evaluate', { expression: NARROW, returnByValue: true }, sessionId)).result.value);
+    }
     await cdp.send('Browser.close').catch(() => undefined);
     ws.close();
     const viewport = root ? { width: Math.round(root.width), height: Math.round(root.height) } : o.viewport;
-    return { measurements: { screenId: o.rootId, source: `chrome ${o.url}`, viewport, nodes: result.nodes }, screenshot };
+    return { measurements: { screenId: o.rootId, source: `chrome ${o.url}`, viewport, nodes: result.nodes, fakedFonts: result.fakedFonts ?? [], ...(narrow ? { narrow } : {}) }, screenshot };
   } finally {
     proc.kill();
     await sleep(300);

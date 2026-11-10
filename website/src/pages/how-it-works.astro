@@ -19,7 +19,7 @@ const steps = [
   },
   {
     n: '03', title: 'Let your AI agent implement', where: 'Your editor · agent time',
-    body: 'The agent reads the brief plus one screen outline, about 17k tokens. It writes the screens using your existing code and tags each element with its Figma id so it can be measured.',
+    body: 'The agent reads the brief (about 4k tokens for five pages) and each screen outline once; it never opens the larger JSON files. It writes the screens using your existing code and tags each element with its Figma id so it can be measured.',
     cmd: 'Read f2f/briefs/sidebar.md and follow it: implement the screens, tag the layers, run f2f verify and fix until it passes.',
   },
   {
@@ -31,10 +31,13 @@ const steps = [
 
 const checks = [
   { name: 'Geometry', body: 'x, y, width and height of every tagged layer, relative to the screen root, ±1 px by default.' },
-  { name: 'Overflow', body: 'Text that is clipped or wraps when the design shows one line.' },
+  { name: 'Style', body: 'On web: computed font family, weight, italic, size, text colour, background and corner radius against the Figma values, plus fonts the browser fakes because their file is not loaded.' },
+  { name: 'Small screen', body: 'On web: the page is loaded again at 375 px and fails if it scrolls sideways or cuts off text or images.' },
+  { name: 'Code rules', body: 'Your source is scanned for Figma ids built with string maths and raw two-decimal sizes copied from Figma.' },
+  { name: 'Overflow', body: 'Text that is clipped.' },
   { name: 'Coverage', body: 'Figma layers with no tag in your code, so nothing goes unmeasured silently.' },
-  { name: 'Font metrics', body: 'Width-only differences on hugging text are warnings, not layout failures.' },
-  { name: 'Visual diff', body: 'On web: a pixel diff against the Figma screenshot, with alpha compositing.' },
+  { name: 'Font metrics', body: 'Text drawn about 2 px narrower or wider by the browser, and the neighbours it nudges sideways, are warnings, not layout failures.' },
+  { name: 'Visual diff', body: 'On web: a pixel diff against the Figma screenshot that ignores edge-only anti-aliasing; a hint for images and icons.' },
 ] as const;
 
 const howToJsonLd = {
@@ -85,7 +88,7 @@ const howToJsonLd = {
           </li>
         ))}
       </ul>
-      <p class="note">Colours, font family and weight, and corner radius are not compared as numbers yet. On web you see them in the diff image.</p>
+      <p class="note">Style and small-screen checks run on web. On Android and iOS, colours and fonts are not compared as numbers yet; check them by eye.</p>
     </section>
 
     <footer class="cta-row page-cta">

@@ -19,24 +19,27 @@ Or without installing: `npx f2f-cli --help`.
 
 ## Use
 
-1. In Figma desktop, run the **F2F** plugin on your screens and unzip the download into your app repo, so `your-app/f2f/` exists.
-2. Check the export and write the brief:
+The full guide with the copy-paste agent prompts is [Getting started](https://github.com/E-verything/F2F/blob/main/docs/getting-started.md). In short:
+
+1. Run the [F2F Figma plugin](https://www.figma.com/community/plugin/1691251414681348956) on your screens and unzip the download into your app root, so `your-app/f2f/` exists. Then `f2f validate f2f`.
+2. Describe your stack and folders once in `f2f-project.md` (prompt 0), and let your agent set up the design system (prompt 1).
+3. Write the brief for the page(s) to build, then give it to your agent with prompt 2:
 
    ```bash
-   f2f validate f2f
-   f2f build --feature "<section or screen name>" --repo .
+   f2f build --feature "<page or section name>" --repo .
+   f2f build --feature "Page A, Page B" --name "My Pages" --repo .   # several pages
    ```
 
-3. Tell your AI agent: *Read `f2f/briefs/<feature>.md` and follow it: implement the screens, tag the layers, run `f2f verify` and fix until it passes.*
-4. Start your app and verify:
+4. Start your app and verify (the brief has the exact command):
 
    ```bash
-   f2f verify --screen <id> --url http://localhost:3000/route   # web, Flutter web
-   f2f verify --screen <id> --android                           # needs adb
-   f2f verify --screen <id> --ios                               # needs idb
+   f2f verify --screen <id> --url http://localhost:3000/<route>   # web, Flutter web
+   f2f verify --screens "<id>=<route>,<id>=<route>" --url http://localhost:3000   # several web pages
+   f2f verify --screen <id> --android                             # needs adb
+   f2f verify --screen <id> --ios                                 # needs idb
    ```
 
-The report in `f2f/verification/<screen>.md` lists PASS/FAIL, every layer that is off with Δx Δy Δw Δh, clipped text, untagged layers and, on web, a red-pixel diff image.
+The report in `f2f/verification/<screen>.md` gives PASS/FAIL with layout offsets (Δx Δy Δw Δh), and on web exact style differences (font, italic, colour, background, radius, fonts the browser fakes), a 375 px small-screen check, code-rule issues, clipped text, untagged layers and a diff image.
 
 ## Commands
 
@@ -44,7 +47,7 @@ The report in `f2f/verification/<screen>.md` lists PASS/FAIL, every layer that i
 |---|---|
 | `f2f validate <dir>` | Check an export: schema, file hashes, cross-references |
 | `f2f inspect --repo .` | Show what F2F detects in your repo |
-| `f2f build --feature <name> --repo .` | Write the brief for your agent |
+| `f2f build --feature <name> --repo . [--name <brief>]` | Write the brief for your agent (one page, a section, or several pages) |
 | `f2f verify --screen <id> …` | Measure the running app against the design |
 | `f2f refresh` | Regenerate outlines with this CLI version |
 | `f2f bench` | Measure size, tokens, time and memory |

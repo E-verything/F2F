@@ -29,6 +29,19 @@ A real, authorised Figma file of a sample social app on the free plan: the 2 scr
 
 Reading the brief plus one outline is about 17k tokens. The first unoptimised export was about 1.6 MB, roughly 400k tokens, per screen.
 
+## End-to-end agent run (web)
+
+A 6-page Next.js 15 site (AC installation service, 1280 px wide, about 350–560 Figma layers per page), built with Claude Code by following only the getting-started guide. Usage is Claude Code's 5-hour session meter.
+
+| Step | Usage | Result |
+|---|---|---|
+| Project profile and app setup (prompt 0) | ~4% | |
+| Design system (prompt 1) | ~8% | |
+| 5 pages in one prompt (prompt 2), CLI 0.1.0 | 27% | 4 PASS, 1 FAIL fixed with prompt 3 |
+| Same 5 pages, CLI 0.1.1 | 20% (~4% per page) | 5 PASS on the first try, small screen 375 px OK |
+
+The 0.1.1 brief for the five pages is about 4k tokens (was 8k). Outlines carry full text, so the agent never opens the screen JSON. Most of the remaining cost is the code the agent writes.
+
 ## Local CLI
 
 | Command | Time |

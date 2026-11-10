@@ -96,6 +96,24 @@ interface Ctx {
   stats: { nodes: number; properties: number; unsupported: number };
   colorUsage: Map<string, number>;
   typeUsage: Map<string, number>;
+  spacingUsage: Map<number, number>;
+  radiusUsage: Map<number, number>;
+}
+
+function bump<K>(m: Map<K, number>, k: K) {
+  m.set(k, (m.get(k) ?? 0) + 1);
+}
+
+// Spacing and radius counts let an agent build spacing/radius tokens when the file defines no variables.
+function countLayoutUsage(node: CanonNode, ctx: Ctx) {
+  if (node.visible === false) return;
+  const l = node.layout;
+  if (l?.padding) for (const v of Object.values(l.padding)) if (v > 0) bump(ctx.spacingUsage, v);
+  if (l?.itemSpacing && l.itemSpacing > 0) bump(ctx.spacingUsage, l.itemSpacing);
+  if (typeof l?.counterAxisSpacing === 'number' && l.counterAxisSpacing > 0) bump(ctx.spacingUsage, l.counterAxisSpacing);
+  const r = node.style?.cornerRadius;
+  if (typeof r === 'number') bump(ctx.radiusUsage, r);
+  else if (r && typeof r === 'object') for (const v of Object.values(r)) if (typeof v === 'number' && v > 0) bump(ctx.radiusUsage, v);
 }
 
 function varRef(alias: unknown, ctx: Ctx): VarRef | undefined {
@@ -432,6 +450,7 @@ function normNode(raw: RawNode, ctx: Ctx, screenAbs: Box | null): CanonNode {
   if (l) node.layout = l;
   const s = style(p, ctx);
   if (s) node.style = s;
+  countLayoutUsage(node, ctx);
   if (raw.type === 'TEXT') {
     node.text = text(raw, ctx);
     // Text colour lives on each run; the node-level copy is either identical or MIXED.
@@ -561,7 +580,12 @@ export interface Normalized {
   issues: Issue[];
   skipped: { pageId: string; id: string; name: string; type: string; reason: string }[];
   stats: { pages: number; nodes: number; properties: number; unsupported: number };
-  usage: { colors: { color: string; count: number }[]; typography: { key: string; count: number }[] };
+  usage: {
+    colors: { color: string; count: number }[];
+    typography: { key: string; count: number }[];
+    spacing: { value: number; count: number }[];
+    radius: { value: number; count: number }[];
+  };
 }
 
 function variableValue(v: unknown, ctx: Ctx): unknown {
@@ -625,6 +649,8 @@ export function normalize(snap: RawSnapshot): Normalized {
     stats: { nodes: 0, properties: 0, unsupported: 0 },
     colorUsage: new Map(),
     typeUsage: new Map(),
+    spacingUsage: new Map(),
+    radiusUsage: new Map(),
   };
 
   const compDeps = new Map<string, ScreenDependencies>();
@@ -718,6 +744,8 @@ export function normalize(snap: RawSnapshot): Normalized {
     usage: {
       colors: [...ctx.colorUsage].map(([color, count]) => ({ color, count })).sort((a, b) => b.count - a.count || a.color.localeCompare(b.color)),
       typography: [...ctx.typeUsage].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count || a.key.localeCompare(b.key)),
+      spacing: [...ctx.spacingUsage].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value - b.value),
+      radius: [...ctx.radiusUsage].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value - b.value),
     },
   };
 }

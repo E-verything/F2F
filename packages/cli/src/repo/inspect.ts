@@ -22,7 +22,9 @@ export interface RepoMap {
   limits: string[];
 }
 
-const IGNORED_DIRS = new Set(['node_modules', '.git', '.dart_tool', 'build', 'dist', '.next', 'ios', 'android', 'macos', 'windows', 'linux', 'web', 'coverage', 'f2f', '.idea', '.vscode']);
+const IGNORED_DIRS = new Set(['node_modules', '.git', '.dart_tool', 'build', 'dist', '.next', 'ios', 'android', 'macos', 'windows', 'linux', 'web', 'coverage', '.idea', '.vscode']);
+// Only the export at the repo root is skipped; a nested f2f/ (e.g. public/f2f/) holds the app's own copied assets.
+const EXPORT_DIR = 'f2f';
 // Never read: credentials and env files may sit anywhere in a repo.
 const SECRET_FILE = /(^\.env)|(\.(pem|key|p12|keystore|jks)$)|(secret|credential|service-account)/i;
 // Test code defines main()/components that are not part of the app, so it is not scanned for app structure.
@@ -43,7 +45,7 @@ async function walk(root: string, limits: string[]): Promise<string[]> {
       if (out.length >= MAX_FILES) return;
       const full = join(dir, e.name);
       if (e.isDirectory()) {
-        if (!IGNORED_DIRS.has(e.name) && !e.name.startsWith('.')) await visit(full);
+        if (!IGNORED_DIRS.has(e.name) && !e.name.startsWith('.') && !(dir === root && e.name === EXPORT_DIR)) await visit(full);
       } else if (e.isFile() && !SECRET_FILE.test(e.name)) out.push(full);
     }
   };
@@ -91,6 +93,12 @@ function scanWeb(file: string, src: string, map: RepoMap) {
     for (const m of src.matchAll(/<Route[^>]*\spath=["']([^"']+)["']/g)) map.routes.push({ path: m[1]!, file });
   }
   for (const m of src.matchAll(/--([\w-]+)\s*:\s*(#[0-9a-fA-F]{6})\b/g)) map.tokens.push({ name: `--${m[1]}`, kind: 'color', value: m[2]!.toLowerCase(), file });
+  // CSS `font` shorthand variables (`--text-body: 400 14px/20px var(--font-inter)`) are the web's text styles.
+  for (const m of src.matchAll(/--([\w-]+)\s*:\s*((?:italic\s+)?(\d00)\s+([\d.]+)px(?:\/[\d.]+px)?\s+[^;]+);/g))
+    map.tokens.push({ name: `--${m[1]}`, kind: 'text-style', value: m[2]!.trim(), file });
+  for (const m of src.matchAll(/import\s*\{([^}]+)\}\s*from\s*['"]next\/font\/google['"]/g))
+    map.fonts.push(...m[1]!.split(',').map((f) => f.trim().replace(/_/g, ' ')).filter(Boolean));
+  for (const m of src.matchAll(/@font-face\s*\{[^}]*font-family:\s*['"]?([^;'"]+)/g)) map.fonts.push(m[1]!.trim());
   // Tailwind v3 config colours (`primary: '#700fce'`); v4 `@theme { --color-*: }` is covered by the CSS variable scan above.
   if (/tailwind\.config\.[cm]?[jt]s$/.test(file))
     for (const m of src.matchAll(/['"]?([\w-]+)['"]?\s*:\s*['"](#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})['"]/g)) {
@@ -147,7 +155,9 @@ export async function inspectRepo(root: string): Promise<RepoMap> {
   if (map.framework === 'next') for (const f of files) {
     const m = /^(?:src\/)?app\/(.*)page\.(tsx|jsx|ts|js)$/.exec(rel(f));
     if (m) map.routes.push({ path: '/' + m[1]!.replace(/\/$/, ''), file: rel(f) });
+    if (/^(?:src\/)?(app\/layout|pages\/_app)\.(tsx|jsx|ts|js)$/.test(rel(f))) map.entryPoints.push(rel(f));
   }
+  map.fonts = [...new Set(map.fonts)].sort();
   if (map.framework !== 'flutter' && map.assets.length) map.assetDirs = [...new Set(map.assets.map((a) => a.file.slice(0, a.file.lastIndexOf('/') + 1)))].sort();
   return map;
 }

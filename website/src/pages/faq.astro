@@ -12,7 +12,7 @@ const faqs = [
   { q: 'What does it cost?', a: 'Nothing. It is open source under the MIT license. It needs no paid Figma plan, no paid API and no server. The Figma free plan works.' },
   { q: 'Does my design or code leave my machine?', a: 'No. The Figma plugin has no network access. The CLI runs locally, reads your repository read-only and never opens env or key files. There is no telemetry.' },
   { q: 'How accurate is it?', a: 'Exported values matched Figma\'s own JSON export with zero mismatches on a real file. Verification checks every tagged layer to ±1 px. In a measured run, one fix round driven by the report took a screen from 31 to 44 of 47 matching layers; the rest were font-rendering warnings.' },
-  { q: 'Does it check colours and fonts?', a: 'Not as numbers yet. Geometry, overflow and coverage are measured; on web, colour and font differences show in the red-pixel diff image. Numeric style checks are on the roadmap.' },
+  { q: 'Does it check colours and fonts?', a: 'Yes, on web, as numbers: font family, weight, italic, size, text colour, background and corner radius of every tagged layer are compared with the Figma values, and fonts the browser fakes because their file is not loaded are reported. On Android and iOS this is not measured yet, so check colours and fonts by eye.' },
   { q: 'What do I need installed?', a: 'Node 22 or newer and the Figma desktop app. For web checks, Chrome or Edge. For Android, adb. For iOS, idb. Nothing is downloaded for you.' },
   { q: 'Does it handle responsive layouts?', a: 'One viewport per screen today. Breakpoints are reported as unknown rather than invented. Linking several widths of the same screen is on the roadmap.' },
 ] as const;

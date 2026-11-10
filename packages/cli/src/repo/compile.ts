@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CanonNode, Paint, ScreenFile } from '../../../core/src/model';
-import { TRANSLATION_RULES, tagging, VERIFY_LOOP } from '../../../core/src/guide';
+import { PRODUCTION_RULES, TRANSLATION_RULES, tagging, VERIFY_LOOP } from '../../../core/src/guide';
+import { slugify } from '../../../core/src/normalize';
 import type { CodeComponent, CodeToken, RepoMap } from './inspect';
 
 // Deterministic feature brief: matches Figma facts to repo code by name/value evidence only, and says "no match" rather than guessing.
@@ -52,7 +53,7 @@ function collect(root: CanonNode, colors: Map<string, ColorUse>, types: Map<stri
   root.style?.strokes?.forEach((p) => addPaint(p, root.style?.styles?.stroke?.name ?? null));
   for (const r of root.text?.runs ?? []) {
     r.fills.forEach((p) => addPaint(p, r.fillStyle?.name ?? null));
-    const key = `${r.fontFamily}|${r.fontStyle}|${r.fontSize}|${r.textStyle?.name ?? ''}`;
+    const key = `${r.fontFamily}|${r.fontStyle}|${r.fontWeight ?? ''}|${r.fontSize}|${r.textStyle?.name ?? ''}`;
     const u = types.get(key) ?? { family: r.fontFamily, style: r.fontStyle, weight: r.fontWeight, size: r.fontSize, textStyle: r.textStyle?.name ?? null, count: 0 };
     u.count++;
     types.set(key, u);
@@ -94,19 +95,48 @@ function nodeIds(n: CanonNode, out: Set<string>) {
   n.children?.forEach((c) => nodeIds(c, out));
 }
 
+// Files without Figma components still have named layers ("Header", "Footer") that the repo may already implement.
+const LAYER_MATCH_DEPTH = 3;
+function layerMatches(n: CanonNode, code: CodeComponent[], out: Map<string, { layer: string; nodeIds: string[]; target: CodeComponent; evidence: string }>, depth = 0) {
+  if (depth > 0 && n.visible !== false && !n.component) {
+    const m = matchComponent(n.name, code);
+    if (m.confidence === 'exact' && m.target) {
+      const e = out.get(m.target.file + m.target.name) ?? { layer: n.name, nodeIds: [], target: m.target, evidence: m.evidence };
+      e.nodeIds.push(n.id);
+      out.set(m.target.file + m.target.name, e);
+      return;
+    }
+  }
+  if (depth < LAYER_MATCH_DEPTH) n.children?.forEach((c) => layerMatches(c, code, out, depth + 1));
+}
+
+// Pages and layouts are routes, not reusable components.
+const PAGE_FILE = /(^|\/)(page|layout|_app|_document)\.[jt]sx?$/;
+
 export interface Brief { markdown: string; data: Record<string, unknown> }
 
-export async function compileFeature(pkgDir: string, feature: string, repo: RepoMap): Promise<Brief> {
+export async function compileFeature(pkgDir: string, feature: string, repo: RepoMap, title?: string): Promise<Brief> {
   const load = async (p: string) => JSON.parse(await readFile(join(pkgDir, p), 'utf8'));
   const manifest = await load('manifest.json');
   const index = await load('screens/index.json');
-  const want = feature.toLowerCase();
-  const feat = (manifest.features as { name: string; slug: string; screenIds: string[] }[]).find((f) => f.slug === want || f.name.toLowerCase() === want);
-  const screens = (index.screens as any[]).filter((s) => (feat ? feat.screenIds.includes(s.id) : s.slug.startsWith(want) || s.id === feature || s.name.toLowerCase() === want));
-  if (!screens.length) {
-    const names = (manifest.features as { slug: string }[]).map((f) => f.slug).join(', ');
-    throw new Error(`No feature or screen "${feature}". Features: ${names}`);
+  const features = manifest.features as { name: string; slug: string; screenIds: string[] }[];
+  const pick = (name: string): { feat?: (typeof features)[number]; screens: any[] } => {
+    const want = name.trim().toLowerCase();
+    const feat = features.find((f) => f.slug === want || f.name.toLowerCase() === want);
+    return { feat, screens: (index.screens as any[]).filter((s) => (feat ? feat.screenIds.includes(s.id) : s.slug.startsWith(want) || s.slug.startsWith(slugify(name.trim())) || s.id === name.trim() || s.name.toLowerCase() === want)) };
+  };
+  const notFound = (name: string) => new Error(`No feature or screen "${name}". Features: ${features.map((f) => f.slug).join(', ')}. Screens: ${(index.screens as any[]).map((s) => s.name).join('; ')}`);
+  let { feat, screens } = pick(feature);
+  // Several pages in one brief: "Services, Contact Us, About Us" (each part is a page or section name).
+  if (!screens.length && feature.includes(',')) {
+    const parts = feature.split(',').filter((p) => p.trim());
+    const picked = parts.map((p) => ({ p, r: pick(p) }));
+    const missing = picked.find((x) => !x.r.screens.length);
+    if (missing) throw notFound(missing.p.trim());
+    screens = [...new Map(picked.flatMap((x) => x.r.screens).map((s) => [s.id, s])).values()];
+    feat = undefined;
   }
+  if (!screens.length) throw notFound(feature);
 
   const files: ScreenFile[] = await Promise.all(screens.map((s) => load(s.file)));
   const comps = await load('components/components.json');
@@ -144,6 +174,10 @@ export async function compileFeature(pkgDir: string, feature: string, repo: Repo
     return { figma: f.name, variants: f.variants.sort(), componentIds: f.ids.sort(), kind, iconAssetIds: kind === 'icon' ? [...new Set(icons.flat() as string[])].sort() : [], ...match };
   });
 
+  const layerReuse = new Map<string, { layer: string; nodeIds: string[]; target: CodeComponent; evidence: string }>();
+  const reusable = repo.components.filter((c) => !PAGE_FILE.test(c.file) && !componentMap.some((m) => m.target?.file === c.file && m.target?.name === c.name));
+  files.forEach((f) => layerMatches(f.root, reusable, layerReuse));
+
   const colorTokens = repo.tokens.filter((t) => t.kind === 'color');
   const colorMap = [...colors.values()].sort((a, b) => b.count - a.count || a.hex.localeCompare(b.hex)).map((c) => {
     const same = colorTokens.filter((t) => t.value === c.hex);
@@ -154,12 +188,14 @@ export async function compileFeature(pkgDir: string, feature: string, repo: Repo
 
   const textTokens = repo.tokens.filter((t) => t.kind === 'text-style');
   const typeMap = [...types.values()].sort((a, b) => b.count - a.count || a.size - b.size).map((t) => {
-    const hit = textTokens.find((x) => x.value.includes(`${t.size}px`) && (!t.weight || x.value.includes(String(t.weight))) && (!/\w+ /.test(x.value) || x.value.toLowerCase().includes(t.family.toLowerCase())));
+    const hit = textTokens.find((x) => new RegExp(`(^|\\s)${t.size}px`).test(x.value) && /italic/i.test(t.style) === /italic/i.test(x.value) && (!t.weight || x.value.includes(String(t.weight))) && (!/\w+ /.test(x.value) || x.value.toLowerCase().includes(t.family.toLowerCase())));
     return { ...t, code: hit ? `${hit.name} (${hit.file})` : null };
   });
   const families = [...new Set([...types.values()].map((t) => t.family))].sort().map((family) => ({
     family,
     status: repo.fonts.some((f) => f.toLowerCase() === family.toLowerCase()) ? 'declared in project' : repo.styling.includes('google_fonts') ? 'not declared; available via google_fonts if it is a Google Font (verify)' : 'MISSING from project',
+    // Browsers fake a missing italic or weight by slanting/thickening another one, which changes text widths and line breaks.
+    styles: [...new Set([...types.values()].filter((t) => t.family === family).map((t) => `${/italic/i.test(t.style) ? 'italic ' : ''}${t.weight ?? t.style}`))].sort(),
   }));
 
   // Assets inside a component the repo already implements are that widget's concern, so only screen-level assets and those of components still to build are listed.
@@ -168,10 +204,12 @@ export async function compileFeature(pkgDir: string, feature: string, repo: Repo
   for (const c of componentMap)
     if (c.confidence !== 'exact' && c.kind !== 'system-ui') for (const id of c.componentIds) (compById.get(id)?.dependencies.assets ?? []).forEach((a: string) => assetIds.add(a));
   const repoAssets = new Map(repo.assets.map((a) => [a.sha256, a.file]));
-  const assetDir = repo.assetDirs[0] ?? 'assets/';
+  const shas = new Map(await Promise.all((assetsManifest.assets as any[]).map(async (a) => [a.id, createHash('sha256').update(await readFile(join(pkgDir, a.file))).digest('hex')] as const)));
+  // New assets go where the project already keeps exported ones, so they stay together.
+  const usedDir = [...shas.values()].map((s) => repoAssets.get(s)).find(Boolean);
+  const assetDir = usedDir ? usedDir.slice(0, usedDir.lastIndexOf('/') + 1) : repo.assetDirs[0] ?? 'assets/';
   const assetMap = await Promise.all((assetsManifest.assets as any[]).filter((a) => assetIds.has(a.id) && a.role !== 'screenshot').map(async (a) => {
-    const sha = createHash('sha256').update(await readFile(join(pkgDir, a.file))).digest('hex');
-    const existing = repoAssets.get(sha);
+    const existing = repoAssets.get(shas.get(a.id)!);
     const action = existing ? `reuse ${existing}`
       : a.role === 'image-fill' ? `sample image in the design (avatar/photo content is usually dynamic); bundle f2f/${a.file} only if it is static`
       : `copy f2f/${a.file} to ${assetDir}`;
@@ -193,15 +231,16 @@ export async function compileFeature(pkgDir: string, feature: string, repo: Repo
   const open = (unresolved.items as any[]).filter((i) => i.nodeId && ids.has(i.nodeId) && !seen.has(i.message) && seen.add(i.message));
 
   const data = {
-    feature: feat?.name ?? feature,
+    feature: title ?? feat?.name ?? feature,
     screens: screens.map((s) => ({ id: s.id, name: s.name, outline: s.outline, file: s.file, viewport: s.viewport, status: s.status })),
     tagging: tagging(repo.framework, repo.dependencies),
-    repo: { framework: repo.framework, styling: repo.styling, entryPoints: repo.entryPoints, routes: repo.routes, assetDirs: repo.assetDirs, commands: repo.commands, limits: repo.limits },
+    repo: { framework: repo.framework, dependencies: repo.dependencies, styling: repo.styling, entryPoints: repo.entryPoints, routes: repo.routes, assetDirs: repo.assetDirs, commands: repo.commands, limits: repo.limits },
     components: componentMap.map((c) => ({
       figma: c.figma, variants: c.variants, componentIds: c.componentIds, kind: c.kind,
       code: c.target ? { name: c.target.name, file: c.target.file, params: c.target.params } : null, confidence: c.confidence, evidence: c.evidence,
       ...(c.kind === 'icon' ? { icon: iconPaths(c) } : {}),
     })),
+    layerReuse: [...layerReuse.values()].map((r) => ({ layer: r.layer, nodeIds: r.nodeIds, code: { name: r.target.name, file: r.target.file, params: r.target.params }, evidence: r.evidence })),
     colors: colorMap,
     typography: typeMap,
     fonts: families,
@@ -221,12 +260,19 @@ function render(d: any): string {
   const icons = count((c) => c.kind === 'icon');
   const system = count((c) => c.kind === 'system-ui');
   const missing = d.components.length - reuse - likely - icons - system;
+  const port = d.repo.dependencies?.includes('vite') ? '5173' : ['next', 'react'].includes(d.repo.framework) ? '3000' : '<port>';
+  const firstId = d.screens[0]?.id ?? '<id>';
   md.push(`# Implementation brief: ${d.feature}`, '');
-  md.push(`Target repo: ${d.repo.framework}${d.repo.styling.length ? ` (${d.repo.styling.join(', ')})` : ''}. Screens: ${d.screens.length}. Components: ${reuse} reuse, ${likely} to confirm, ${icons} icons (SVG assets), ${missing} widgets to create, ${system} system UI. Assets: ${d.assets.filter((a: any) => a.repo).length} already in repo, ${d.assets.filter((a: any) => !a.repo).length} to add.`, '');
-  md.push('## Task', '', `Implement the screens below in this ${d.repo.framework} project. Read each screen outline first (one line per layer), and open its JSON only for details. Reuse the mapped components and tokens. Follow the "Figma → code rules" below. Do not invent values. Ask about anything under "Open questions". Then tag, run and verify as below until the verdict is PASS.`, '');
-  md.push('## Tag, run, verify', '', d.tagging.how, '', d.tagging.snippet, '', `Run: ${d.tagging.run}`, '', `Verify each screen: ${d.tagging.verify} (screen ids below). Fix the largest mismatches first and re-run.`, '');
-  md.push('## Screens', '', ...d.screens.map((s: any) => `- ${s.name} — ${s.viewport.width}x${s.viewport.height}, approval ${s.status.value}: [outline](../${s.outline}), [full JSON](../${s.file})`), '');
+  md.push(`Target repo: ${d.repo.framework}${d.repo.styling.length ? ` (${d.repo.styling.join(', ')})` : ''}. Screens: ${d.screens.length}. Components: ${reuse + d.layerReuse.length} reuse, ${likely} to confirm, ${icons} icons (SVG assets), ${missing} widgets to create, ${system} system UI. Assets: ${d.assets.filter((a: any) => a.repo).length} already in repo, ${d.assets.filter((a: any) => !a.repo).length} to add.`, '');
+  md.push('## Task', '', `Implement the screens below in this ${d.repo.framework} project. Read each screen outline (one line per layer): it holds every value and the full text you need, so do not open or script the screen JSON files, which are many times larger. Read each outline once and build that screen before reading the next. Reuse the mapped components and tokens. Follow the "Production code rules" and "Figma → code rules" below. Do not invent values. Ask about anything under "Open questions". Then tag, run and verify as below until the verdict is PASS.`, '');
+  const verifyCmd = (id: string) => d.tagging.verify.replace('<id>', id).replace('<port>', port);
+  md.push('## Tag, run, verify', '', d.tagging.how, '', d.tagging.snippet.replace(/869:16072/g, firstId), '', `Run: ${d.tagging.run}`, '', 'Verify each screen (replace `<route>` with the route you gave it):', '', ...d.screens.map((s: any) => `- ${s.name}: ${verifyCmd(s.id)}`), '',
+    // One run for all web screens saves the agent a command and a summary per page.
+    ...(d.screens.length > 1 && d.tagging.verify.includes('--url http') ? [`All at once: \`f2f verify --screens "${d.screens.map((s: any) => `${s.id}=<route>`).join(',')}" --url http://localhost:${port}\` (routes without the leading slash, empty for the home page)`, ''] : []),
+    'Fix the largest mismatches first and re-run.', '');
+  md.push('## Screens', '', ...d.screens.map((s: any) => `- ${s.name} (id \`${s.id}\`) — ${s.viewport.width}x${s.viewport.height}, approval ${s.status.value}: [outline](../${s.outline})`), '');
   md.push('## Components', '', '| Figma | Variants used | Code | Confidence | Evidence |', '|---|---|---|---|---|');
+  for (const r of d.layerReuse) md.push(`| layer "${r.layer}" (${r.nodeIds.map((i: string) => `#${i}`).join(', ')}) | — | \`${r.code.name}\` (${r.code.file})${r.code.params.length ? ` params: ${r.code.params.join(', ')}` : ''} — **reuse, do not rebuild** | exact | ${r.evidence} |`);
   const codeCell = (c: any) =>
     c.code ? `\`${c.code.name}\` (${c.code.file})${c.code.params.length ? ` params: ${c.code.params.join(', ')}` : ''}`
       : c.kind === 'icon' ? `icon — render ${c.icon.join(', ')} (e.g. an SVG widget)`
@@ -237,13 +283,22 @@ function render(d: any): string {
   for (const c of d.colors) md.push(`| ${c.hex} | ${c.token ?? '—'} | ${c.count} | ${c.code ?? `**none** — ${c.token ? 'add a token' : 'hard-coded in design'}`} |`);
   md.push('', '## Typography', '', '| Family | Style | Size | Figma style | Uses | Code |', '|---|---|---|---|---|---|');
   for (const t of d.typography) md.push(`| ${t.family} | ${t.style}${t.weight ? ` (${t.weight})` : ''} | ${t.size} | ${t.textStyle ?? '—'} | ${t.count} | ${t.code ?? '**none**'} |`);
-  md.push('', 'Fonts: ' + d.fonts.map((f: any) => `${f.family} — ${f.status}`).join('; '), '');
-  md.push('## Assets', '', ...d.assets.map((a: any) => `- \`${a.id}\` (${a.role}, layers ${a.sourceNodeIds.slice(0, 3).join(', ')}${a.sourceNodeIds.length > 3 ? '…' : ''}): ${a.action}`), '');
+  md.push('', 'Fonts: ' + d.fonts.map((f: any) => `${f.family} — ${f.status}; load these weights/styles: ${f.styles.join(', ')}`).join('; ') + '. A missing italic or weight is faked by the browser and changes text widths.', '');
+  // Assets already in the repo under their export file name collapse to one line per folder; listing each costs the agent tokens for no decision.
+  const base = (p: string) => p.slice(p.lastIndexOf('/') + 1);
+  const sameName = new Map<string, number>();
+  const listed = d.assets.filter((a: any) => {
+    if (!a.repo || base(a.repo) !== base(a.file)) return true;
+    const dir = a.repo.slice(0, a.repo.lastIndexOf('/') + 1);
+    sameName.set(dir, (sameName.get(dir) ?? 0) + 1);
+    return false;
+  });
+  md.push('## Assets', '', ...[...sameName].map(([dir, n]) => `- ${n} asset(s) are already in \`${dir}\` under the same file name as in the outline (\`../assets/<file>\` → \`${dir}<file>\`): reuse them.`), ...listed.map((a: any) => `- \`${a.id}\` (${a.role}, layers ${a.sourceNodeIds.slice(0, 3).join(', ')}${a.sourceNodeIds.length > 3 ? '…' : ''}): ${a.action}`), '');
   if (d.navigation.length) md.push('## Prototype navigation (intent only)', '', ...d.navigation.map((f: any) => `- ${f.sourceNodeId} on ${f.trigger?.type ?? '?'}: ${f.actions.map((a: any) => `${a.type}${a.destinationId ? ` → ${a.destinationId}${a.destinationInExport ? '' : ' (not exported)'}` : ''}`).join(', ')}`), '');
   md.push('## Project', '', `Entry points: ${d.repo.entryPoints.join(', ') || 'unknown'}. Routes: ${d.repo.routes.map((r: any) => r.path).join(', ') || 'none found'}. Asset dirs: ${d.repo.assetDirs.join(', ') || 'none'}. Commands: ${Object.entries(d.repo.commands).map(([k, v]) => `${k}=\`${v}\``).join(', ') || 'none'}.`, '');
   if (d.repo.limits.length) md.push(`Inspection limits: ${d.repo.limits.join('; ')}.`, '');
   md.push('## Open questions', '', ...(d.unresolved.length ? d.unresolved.map((u: any) => `- ${u.message} → ${u.action}`) : ['- none']), '');
-  md.push(TRANSLATION_RULES, VERIFY_LOOP);
+  md.push(PRODUCTION_RULES, TRANSLATION_RULES, VERIFY_LOOP);
   md.push('## Verification', '', `Render each screen at its viewport and compare these screen-relative boxes (±${VERIFY_TOLERANCE_PX}px). Full list: \`verification\` in the brief JSON.`, '');
   for (const v of d.verification) {
     md.push(`- ${v.screen} @ ${v.viewport.width}x${v.viewport.height}: ` + v.boxes.slice(0, 8).map((b: any) => `"${b.name}" ${b.box.x},${b.box.y} ${b.box.width}x${b.box.height}`).join('; ') + (v.boxes.length > 8 ? `; +${v.boxes.length - 8} more` : ''));

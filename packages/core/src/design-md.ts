@@ -5,7 +5,6 @@ import { TRANSLATION_RULES, VERIFY_LOOP } from './guide';
 
 // Front matter follows the common DESIGN.md token layout so existing DESIGN.md tooling can lint it; only source tokens go there.
 
-const TOP_OBSERVED = 12;
 const yamlStr = (s: string) => JSON.stringify(s);
 
 interface ScreenRef { id: string; name: string; file: string; outline: string; feature: string | null; pageName: string; status: { value: string }; viewport: { width: number; height: number } }
@@ -92,8 +91,10 @@ export function designMd(n: Normalized, snap: RawSnapshot, screens: ScreenRef[])
       md.push('### Text styles (source; weight inferred from style name)', '', ...typography.map((t) => `- \`${slugify(t.name)}\`: ${t.fontFamily} ${t.fontStyle}, ${t.fontSize}px, line-height ${t.lineHeight.unit === 'auto' ? 'auto' : `${t.lineHeight.value}${t.lineHeight.unit === 'px' ? 'px' : '%'}`}, letter-spacing ${t.letterSpacing.value}${t.letterSpacing.unit === 'px' ? 'px' : '%'}`), '');
   }
   md.push('### Observed values (calculated usage counts across exported screens)', '');
-  md.push('Colours: ' + (n.usage.colors.slice(0, TOP_OBSERVED).map((c) => `${c.color} ×${c.count}`).join(', ') || 'none'), '');
-  md.push('Type (family|style|size|line-height|letter-spacing): ' + (n.usage.typography.slice(0, TOP_OBSERVED).map((t) => `\`${t.key}\` ×${t.count}`).join(', ') || 'none'), '');
+  md.push('Colours: ' + (n.usage.colors.map((c) => `${c.color} ×${c.count}`).join(', ') || 'none'), '');
+  md.push('Type (family|style|size|line-height|letter-spacing): ' + (n.usage.typography.map((t) => `\`${t.key}\` ×${t.count}`).join(', ') || 'none'), '');
+  md.push('Spacing (Auto Layout padding and gaps, px): ' + (n.usage.spacing.map((s) => `${s.value} ×${s.count}`).join(', ') || 'none'), '');
+  md.push('Corner radius (px): ' + (n.usage.radius.map((r) => `${r.value} ×${r.count}`).join(', ') || 'none'), '');
 
   md.push('## Components', '');
   if (!n.components.length) md.push('_No component instances in the exported scope._', '');

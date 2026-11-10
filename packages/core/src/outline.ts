@@ -2,7 +2,6 @@ import type { CanonNode, Effect, Paint, ScreenFile, Style, TextRun, VarRef } fro
 
 // One line per layer so an agent can read a whole screen cheaply; the JSON file stays the complete source of truth.
 
-const MAX_TEXT = 80;
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 const tok = (v?: VarRef) => (v?.name ? `{${v.name}}` : '');
 
@@ -92,8 +91,9 @@ function line(n: CanonNode, assetPath: (id: string) => string): string {
     // Figma's 'auto' line height is font-metric based and differs between engines; a box that hugs its text reveals the rendered px.
     const lines = n.text.characters.split('\n').length;
     const autoPx = n.text.autoResize === 'WIDTH_AND_HEIGHT' && new Set(n.text.runs.map((r) => r.fontSize)).size === 1 ? g.height / lines : null;
-    const t = n.text.characters.replace(/\n/g, '\\n').replace(/\s+/g, ' ');
-    parts.push(`text "${t.length > MAX_TEXT ? t.slice(0, MAX_TEXT) + '…' : t}" ${n.text.runs.map((r) => runStr(r, autoPx)).join(' | ')}${n.text.alignHorizontal && n.text.alignHorizontal !== 'LEFT' ? ` align ${n.text.alignHorizontal.toLowerCase()}` : ''}${n.text.autoResize ? ` resize ${n.text.autoResize.toLowerCase()}` : ''}${n.text.truncation === 'ENDING' ? ` truncate${n.text.maxLines ? ` ${n.text.maxLines} lines` : ''}` : ''}${n.text.hasMissingFont ? ' FONT-MISSING' : ''}`);
+    // Full copy, never clipped: a clipped string sends the agent into the much larger JSON file to recover it.
+    const t = n.text.characters.replace(/\n/g, '\\n').replace(/"/g, '\\"').replace(/\s+/g, ' ');
+    parts.push(`text "${t}" ${n.text.runs.map((r) => runStr(r, autoPx)).join(' | ')}${n.text.alignHorizontal && n.text.alignHorizontal !== 'LEFT' ? ` align ${n.text.alignHorizontal.toLowerCase()}` : ''}${n.text.autoResize ? ` resize ${n.text.autoResize.toLowerCase()}` : ''}${n.text.truncation === 'ENDING' ? ` truncate${n.text.maxLines ? ` ${n.text.maxLines} lines` : ''}` : ''}${n.text.hasMissingFont ? ' FONT-MISSING' : ''}`);
   }
   if (n.component) {
     const v = n.component.variant ? ` (${Object.entries(n.component.variant).map(([k, x]) => `${k}=${x}`).join(', ')})` : '';
@@ -106,7 +106,8 @@ function line(n: CanonNode, assetPath: (id: string) => string): string {
   return parts.join(' | ');
 }
 
-export function screenOutline(file: ScreenFile, jsonPath: string, assetPath: (id: string) => string): string {
+// `reuse` maps a layer id to the existing code component that already renders it; its subtree is replaced by one line.
+export function screenOutline(file: ScreenFile, jsonPath: string, assetPath: (id: string) => string, reuse: Map<string, string> = new Map()): string {
   const s = file.screen;
   const out = [
     `# ${s.name}`,
@@ -116,6 +117,15 @@ export function screenOutline(file: ScreenFile, jsonPath: string, assetPath: (id
     '',
   ];
   const walk = (n: CanonNode, depth: number) => {
+    const code = reuse.get(n.id);
+    if (code && n.children?.length) {
+      // The texts stay so the agent can spot per-page copy differences and pass them as props or a variant.
+      const texts: string[] = [];
+      const collect = (c: CanonNode) => { if (c.text) texts.push(JSON.stringify(c.text.characters.replace(/\s+/g, ' '))); c.children?.forEach(collect); };
+      n.children.forEach(collect);
+      out.push(`${'  '.repeat(depth)}- ${line(n, assetPath)} | REUSE ${code}: already built, children omitted; check its texts match: ${texts.join(' ') || 'none'}`);
+      return;
+    }
     out.push(`${'  '.repeat(depth)}- ${line(n, assetPath)}`);
     n.children?.forEach((c) => walk(c, depth + 1));
   };

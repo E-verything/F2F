@@ -18,7 +18,7 @@ const parts = [
 const features = [
   { icon: 'layers', title: 'Facts, not guesses', body: 'Values come from the Figma Plugin API. Each one is marked as source, calculated or inferred, so your agent never treats a guess as a spec.' },
   { icon: 'code', title: 'Reuses your codebase', body: 'Finds your existing widgets, colour tokens, text styles, fonts and routes, and tells the agent to reuse them instead of duplicating.' },
-  { icon: 'diff', title: 'Measured, not claimed', body: 'Every layer is compared to ±1 px, with overflow, coverage and font-metric checks, plus a red-pixel diff image on web.' },
+  { icon: 'diff', title: 'Measured, not claimed', body: 'Every layer is compared to ±1 px. On web, fonts, colours and corners are compared as numbers, the page is checked at 375 px, and a diff image highlights the rest.' },
   { icon: 'devices', title: 'Any frontend stack', body: 'React, Next, Vue, Svelte, HTML, Flutter, React Native, Compose and SwiftUI. Web, Android, iOS or a Flutter host test.' },
   { icon: 'agent', title: 'Any AI agent', body: 'The output is plain Markdown and JSON. Any coding agent that can read files and run a command can follow the loop.' },
   { icon: 'lock', title: 'Local-first and free', body: 'No server, no paid API, no telemetry. The plugin has no network access at all. MIT licensed.' },
@@ -68,7 +68,7 @@ const softwareJsonLd = {
     <ul class="container stats" role="list">
       <li><strong>±1 px</strong><span>geometry check per layer</span></li>
       <li><strong>0</strong><span>value mismatches vs Figma's own JSON</span></li>
-      <li><strong>~17k</strong><span>tokens of context per screen</span></li>
+      <li><strong>5 / 5</strong><span>pages PASS on the first try in our test site</span></li>
       <li><strong>0</strong><span>servers, keys or paid APIs</span></li>
     </ul>
   </section>
@@ -147,7 +147,7 @@ const softwareJsonLd = {
   <section class="section">
     <div class="container">
       <div class="glass-card cta-card">
-        <h2>Your next screen, in about 10 minutes.</h2>
+        <h2>Your next page, measured against the design.</h2>
         <p>Free. Open source. Your designs and code never leave your machine.</p>
         <div class="cta-row">
           <a href="/docs" class="btn btn-primary">Read the quick start <Icon name="arrow" size={18} /></a>

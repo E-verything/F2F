@@ -66,6 +66,19 @@ export function tagging(framework: string, dependencies: string[] = []): Tagging
   return { ...web, how: `${web.how} Mobile: ${reactNative.how} ${native.how}` };
 }
 
+// Measuring at one viewport must not turn the design into a fixed canvas; these rules keep the built code production-grade.
+export const PRODUCTION_RULES = [
+  '## Production code rules',
+  '',
+  '- **Fluid, not a fixed canvas.** Never give the page or a section the design viewport width. Sections are full width; content sits in a centred container with `max-width` set to the design container width. Rows of cards use wrapping flex or a grid (`repeat(auto-fit, minmax(<card min width>, 1fr))`) so they stack on narrow screens. Use absolute positions only for decorations.',
+  '- **Responsive.** `f2f verify` checks the design viewport. Below it, the layout must still work with no horizontal scroll at 375px wide: stack columns, let text wrap (drop design `\\n` line breaks under the design width), scale big headings with `clamp()`. Header navigation collapses into a menu button (`<button aria-expanded>` that opens the same links) once the links no longer fit on one line; never let nav links wrap. Follow breakpoints in the project profile if it lists any.',
+  '- **Clean values.** Round sub-pixel measurements to whole px or the nearest token within 1px (23.08 → 24 if a 24 token exists). Do not add padding or offsets to chase fractions; the verifier tolerance and its font-metric warnings cover them.',
+  '- **Semantic order.** HTML order follows reading order (header, main, footer) whatever the Figma layer order. Positions are measured, not order.',
+  '- **Real interactions.** Links are `<a href>`, actions are `<button>`, each with hover, focus-visible and active styles (from the design, or a darker/lighter step of the same token). Accordions use `<details>/<summary>` or a button with `aria-expanded`. Forms use `<form>`, `<label>` and real inputs. Text stays text; images get alt text.',
+  '- **Tags as literals.** Write every Figma id exactly as the outline shows it. Never compute ids. A shared component takes its root id as a prop (e.g. `figmaId="1:467"`) and tags only its root; inner layers of shared components may stay untagged.',
+  '',
+].join('\n');
+
 export const VERIFY_LOOP = [
   '## Verify loop',
   '',
