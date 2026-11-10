@@ -7,6 +7,8 @@ on:
     paths:
       - packages/cli/**
       - packages/core/**
+      - .github/workflows/release.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
