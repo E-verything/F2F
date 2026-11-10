@@ -188,7 +188,9 @@ export async function compileFeature(pkgDir: string, feature: string, repo: Repo
 
   const textTokens = repo.tokens.filter((t) => t.kind === 'text-style');
   const typeMap = [...types.values()].sort((a, b) => b.count - a.count || a.size - b.size).map((t) => {
-    const hit = textTokens.find((x) => new RegExp(`(^|\\s)${t.size}px`).test(x.value) && /italic/i.test(t.style) === /italic/i.test(x.value) && (!t.weight || x.value.includes(String(t.weight))) && (!/\w+ /.test(x.value) || x.value.toLowerCase().includes(t.family.toLowerCase())));
+    const fits = (x: CodeToken) => new RegExp(`(^|\\s)${t.size}px`).test(x.value) && /italic/i.test(t.style) === /italic/i.test(x.value) && (!/[a-z]/i.test(x.value.replace(/\bitalic\b|\b\d00\b|[\d.]+px(\/[\d.]+px)?/gi, '')) || x.value.toLowerCase().includes(t.family.toLowerCase()));
+    // A full match (weight too) always wins; a size-only token (e.g. Tailwind v3 fontSize without a weight) is the fallback.
+    const hit = textTokens.find((x) => fits(x) && (!t.weight || x.value.includes(String(t.weight)))) ?? (t.weight ? textTokens.find((x) => fits(x) && !/\b\d00\b/.test(x.value)) : undefined);
     return { ...t, code: hit ? `${hit.name} (${hit.file})` : null };
   });
   const families = [...new Set([...types.values()].map((t) => t.family))].sort().map((family) => ({
@@ -230,7 +232,13 @@ export async function compileFeature(pkgDir: string, feature: string, repo: Repo
   const seen = new Set<string>();
   const open = (unresolved.items as any[]).filter((i) => i.nodeId && ids.has(i.nodeId) && !seen.has(i.message) && seen.add(i.message));
 
+  // The dev's own URL wins over the framework default: the profile's verify URL, else a port pinned in the dev script.
+  const text = async (p: string) => readFile(join(repo.root, p), 'utf8').catch(() => '');
+  const profilePort = /localhost:(\d+)/.exec((await text('f2f-project.md')).split('\n').find((l) => /url/i.test(l) && /localhost:\d+/.test(l)) ?? '')?.[1];
+  const scriptPort = /(?:-p|--port)[ =](\d+)/.exec(JSON.parse((await text('package.json')) || '{}').scripts?.dev ?? '')?.[1];
+
   const data = {
+    devPort: profilePort ?? scriptPort ?? null,
     feature: title ?? feat?.name ?? feature,
     screens: screens.map((s) => ({ id: s.id, name: s.name, outline: s.outline, file: s.file, viewport: s.viewport, status: s.status })),
     tagging: tagging(repo.framework, repo.dependencies),
@@ -260,7 +268,7 @@ function render(d: any): string {
   const icons = count((c) => c.kind === 'icon');
   const system = count((c) => c.kind === 'system-ui');
   const missing = d.components.length - reuse - likely - icons - system;
-  const port = d.repo.dependencies?.includes('vite') ? '5173' : ['next', 'react'].includes(d.repo.framework) ? '3000' : '<port>';
+  const port = d.devPort ?? (d.repo.dependencies?.includes('vite') ? '5173' : ['next', 'react'].includes(d.repo.framework) ? '3000' : '<port>');
   const firstId = d.screens[0]?.id ?? '<id>';
   md.push(`# Implementation brief: ${d.feature}`, '');
   md.push(`Target repo: ${d.repo.framework}${d.repo.styling.length ? ` (${d.repo.styling.join(', ')})` : ''}. Screens: ${d.screens.length}. Components: ${reuse + d.layerReuse.length} reuse, ${likely} to confirm, ${icons} icons (SVG assets), ${missing} widgets to create, ${system} system UI. Assets: ${d.assets.filter((a: any) => a.repo).length} already in repo, ${d.assets.filter((a: any) => !a.repo).length} to add.`, '');

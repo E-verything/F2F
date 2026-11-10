@@ -12,6 +12,7 @@ Needs Node 22 or newer.
 
 ```bash
 npm install -g f2f-cli
+f2f --version   # e.g. f2f-cli 0.1.2
 f2f --help
 ```
 

@@ -22,10 +22,10 @@ Requirements: Node 22+, Figma, and Chrome or Edge for web checks. You do not nee
 
    ```bash
    npm install -g f2f-cli   # the package is f2f-cli; the command is f2f
-   f2f --help
+   f2f --version            # prints the installed version, e.g. f2f-cli 0.1.2
    ```
 
-   Do not run `npm install -g f2f`: that name belongs to an unrelated package.
+   Do not run `npm install -g f2f`: that name belongs to an unrelated package. To update later, run `npm install -g f2f-cli@latest`.
 
 2. In Figma, open [F2F on Figma Community](https://www.figma.com/community/plugin/1691251414681348956) and click **Open in…** or **Try it out**. The plugin then appears under **Plugins** as **F2F**.
 
@@ -45,6 +45,7 @@ F2F reads structure and names straight from Figma. A well-organised file gives t
 
 - `f2f/screens/index.json` lists every screen with its `feature` (the section name). Search for `"feature": "Network"` with the quotes; a plain search for `Network` also matches other sections such as "Network error".
 - `f2f build --feature "Network"` matches the section name exactly, so the brief contains only that section's screens.
+- A frame that is not inside a Figma Section has `"feature": null`. That is normal: build it by its screen name, or several at once with `f2f build --feature "Services, Contact Us, About Us" --name "Site Pages" --repo .`.
 - Give the agent the brief, not the whole `f2f/` folder. The brief already points to the right outlines, components, tokens and assets.
 
 ## What is inside `f2f/`
@@ -95,13 +96,41 @@ Pick the path that fits you:
 Run `f2f inspect --repo .` first, then paste:
 
 ```
-Create or update f2f-project.md in this folder (the app root) using the template in the F2F getting-started guide ("0. Project profile"; it is also below if I pasted it). If f2f-project.md already exists here, fill only its missing or empty lines and keep my values. Never create a second copy in another folder.
-Fill each line ONLY from evidence: package.json / pubspec.yaml / build files, existing folders and config, the output of `f2f inspect --repo .`, and f2f/screens/index.json for the screen names. If there is no f2f/ folder here, ask me where I unzipped the F2F export.
+Create or update f2f-project.md in this folder (the app root) using the template at the end of this prompt. If f2f-project.md already exists here, fill only its missing or empty lines and keep my values. Never create a second copy in another folder.
+Fill each line ONLY from evidence: package.json / pubspec.yaml / build files, existing folders and config, the output of `f2f inspect --repo .`, f2f/screens/index.json for the screen names and f2f/DESIGN.md for the fonts. If there is no f2f/ folder here: when `f2f inspect` names a folder with the F2F export, use that folder and tell me to rename it to f2f/; otherwise ask me where I unzipped the export.
 - After every value you filled, add the evidence in brackets, e.g. "Next.js 15 App Router [package.json next@15.1, app/ folder]".
 - Where there is no evidence (a new project, or a choice such as UI library, data or scope), write "ASK" and do not guess.
 - For "Screens NOT to be built", list screens whose names look like style guides, notes or components, marked "ASK: confirm".
-Then show me only the ASK lines as numbered questions and wait for my answers before you finish the file.
+Then show me only the ASK lines as numbered questions, each with your recommended answer, and wait for my answers before you finish the file. Recommend: the latest stable version for a new app; loading the font families DESIGN.md lists (say that system fonts make `f2f verify` fail, because every text box measures differently); one route for every screen to be built (first screen "/", the others a short kebab-case name); the framework's default dev URL. If I answer only some questions, ask again only the ones still open.
 At the end, report only what you actually did, then end with: "Next step: no app yet → paste prompt 0b from the F2F guide; app exists → paste prompt 1 (Design system setup)."
+
+Template:
+# F2F project profile
+## Stack
+- Platform: <web | mobile | desktop>
+- Framework and version: <e.g. Next.js 15 App Router | Flutter 3.24 | React Native 0.76 + Expo | Electron 33 + React | SwiftUI iOS 17 | Jetpack Compose>
+- Language: <TypeScript | Dart | Kotlin | Swift | …>
+- Styling: <CSS Modules | Tailwind 4 | styled-components | Flutter ThemeData | …>
+- UI component library: <none | shadcn/ui | MUI 6 | Chakra | Material 3 | …> (when a design component matches a library component, use the library one, styled with the design tokens)
+- Icons: <use the SVGs from f2f/assets | lucide-react | …>
+- Fonts: <the families in f2f/DESIGN.md and how they load, e.g. Inter + Manrope via next/font/google | bundled in assets/fonts | pubspec fonts>
+- New dependencies: <not allowed | allowed after asking>
+## Where code goes
+- Design tokens / theme: <e.g. app/globals.css :root variables | lib/theme/app_theme.dart>
+- Shared components: <e.g. components/ui/>
+- Screens / pages: <e.g. app/<route>/page.tsx | lib/screens/>
+- Assets: <e.g. public/f2f/ | assets/images/>
+- Screen → route/name: <one entry per screen to be built, e.g. Landing Page → /, Contact Us → /contact>
+## Scope
+- Screens in the export that are NOT to be built: <e.g. style-guide frames, notes, components>
+- Data: <static content from the design | real API: describe it>
+- Interactivity: <static layout only | forms validate on the client | describe>
+- Viewports: <only the Figma width | the Figma width plus breakpoints you define here>
+- Accessibility: <e.g. semantic HTML, alt text from layer names, focus states from the design>
+## Commands
+- Run the app: <e.g. npm run dev>
+- App URL or device for verify: <e.g. http://localhost:3000 | --android | --ios>
+- Lint / type-check: <e.g. npm run lint && npx tsc --noEmit>
 ```
 
 Check the file once. Every later prompt depends on it.
@@ -114,7 +143,8 @@ Skip this if your app already exists.
 Create the app described in f2f-project.md in this folder. This folder is the app root.
 - The values in f2f-project.md are my decisions; they need no evidence in the repo. Stop only if a line needed here is empty or says ASK.
 - Use the official project generator for the framework and version it names, with every choice passed as a flag (no interactive questions). If the generator refuses a non-empty folder, move f2f-project.md and f2f/ out first and back afterwards.
-- If there is no f2f/ folder (with f2f/manifest.json) here, ask me where I unzipped the F2F export, and move that f2f/ folder here.
+- If there is no f2f/ folder (with f2f/manifest.json) here: when `f2f inspect --repo .` names a folder with the F2F export, rename or move that folder to f2f/; otherwise ask me where I unzipped the export, and move it here as f2f/.
+- If a line asks for a version and says ASK, use the latest stable version and say so in the report instead of stopping.
 - Do not initialise git or commit anything; pass the generator's flag that skips git (for create-next-app: --disable-git). I set up version control myself.
 - Make the folders the profile names under "Where code goes". Add f2f/ to .gitignore unless the profile says to commit it.
 - Install the generator's own dependencies (e.g. npm install), and nothing else. Remove any folder you emptied.
@@ -136,7 +166,7 @@ Fill every line. Write `none` where something does not apply. **Leave nothing bl
 - Styling: <CSS Modules | Tailwind 4 | styled-components | Flutter ThemeData | …>
 - UI component library: <none | shadcn/ui | MUI 6 | Chakra | Material 3 | …> (when a design component matches a library component, use the library one, styled with the design tokens)
 - Icons: <use the SVGs from f2f/assets | lucide-react | …>
-- Fonts: <how fonts load, e.g. next/font/google | bundled in assets/fonts | pubspec fonts>
+- Fonts: <the families in f2f/DESIGN.md and how they load, e.g. Inter + Manrope via next/font/google | bundled in assets/fonts | pubspec fonts>
 - New dependencies: <not allowed | allowed after asking>
 
 ## Where code goes
@@ -144,7 +174,7 @@ Fill every line. Write `none` where something does not apply. **Leave nothing bl
 - Shared components: <e.g. components/ui/>
 - Screens / pages: <e.g. app/<route>/page.tsx | lib/screens/>
 - Assets: <e.g. public/f2f/ | assets/images/>
-- Screen → route/name: <e.g. route from the Figma frame name in kebab-case; first screen is "/">
+- Screen → route/name: <one entry per screen to be built, e.g. Landing Page → /, Contact Us → /contact>
 
 ## Scope
 - Screens in the export that are NOT to be built: <e.g. style-guide frames, notes, components>
@@ -209,7 +239,7 @@ Sources: f2f/DESIGN.md, f2f/tokens/tokens.json, f2f/components/components.json, 
 7. Questions: a value you can read in the screen outlines is a fact, so use it and do not ask. If the same element differs between screens or instances (sizes, shadows, nav labels, widths), build it as variants or props so each instance gets exactly its own measured values. Never ask which one is "right"; list the differences as a note. Odd values (13.5, 7.99) are measured facts too: use them as written; make tokens only for values that repeat on 2+ screens. Skip measured elements no screen to be built uses. Skip things that appear only on screens f2f-project.md excludes (e.g. fonts or colours used only in a style guide). Ask only about decisions the files cannot answer.
 Output: the files you created, a table "Figma component set → component → file", and the open questions.
 Do not build screens in this session, even after I answer questions: screens are built from the brief that `f2f build` writes.
-Next step: list the screen and section names from f2f/screens/index.json that are to be built, then say: "Run `f2f build --feature "<one of these names>" --repo .`, then paste prompt 2 (Build pages) from the F2F guide."
+Next step: list the screens from f2f/screens/index.json that are to be built, then give me the exact command to copy: when they share one Figma Section (their "feature"), `f2f build --feature "<section name>" --repo .`; otherwise (feature is null) one command for all of them, `f2f build --feature "<screen 1>, <screen 2>, …" --name "<short name>" --repo .`. Then say: "then paste prompt 2 (Build pages) from the F2F guide with Build: <that section name, or the --name value>."
 ```
 
 ### 2. Build pages (one page or one section)
@@ -237,7 +267,7 @@ Task: build the page(s) named in "Build:" from their brief in f2f/briefs/ (the b
 - Copy the assets the brief lists into the assets folder from f2f-project.md.
 - Tag every element with its Figma id as the brief shows.
 - Start the app with the command from f2f-project.md, run the verify command from the brief, and fix until it passes.
-Output: files changed, components reused vs. newly created, verify result per screen, open questions.
+Output: files changed, components reused vs. newly created, verify result per screen, open questions, and the line "See every difference with images: run `f2f report --open`".
 Next step: every screen PASS → "Build the next page: `f2f build --feature "<next name>" --repo .`, then prompt 2 with Build: <next name>", naming the screens not built yet; any FAIL left after your fixes → "Paste prompt 3 (Fix after verify) from the F2F guide."
 ```
 
@@ -249,7 +279,7 @@ Follow f2f-project.md and the F2F files exactly. Never invent a value; if someth
 Find every report in f2f/verification/*.md whose verdict is **FAIL**, and fix those screens one by one (read the .md report; also look at the .diff.png next to it if there is one). If none says FAIL, say so and stop.
 Fix the listed differences, largest first. Fix the cause in the shared widget or the token when the same difference appears on several elements; do not patch each screen separately.
 A value read from the screen outline is a design fact, not a value you chose. If instances of the same element differ in the design (sizes, offsets, gaps), give each instance its own measured values through a prop or a per-instance class; do not ask me which one is right. List those differences as a note for the designer.
-Do not change any value that is not listed. Re-run verify for each fixed screen until it passes, then stop every dev server you started and summarise what you actually changed and why, with the line "Dev servers: none running".
+Do not change any value that is not listed. Re-run verify for each fixed screen until it passes, then stop every dev server you started and summarise what you actually changed and why, with the line "Dev servers: none running" and the line "See every difference with images: run `f2f report --open`".
 Before starting a dev server, check whether one is already running for this app and reuse it. Before you report, stop every dev server you started (including background ones) and delete log files you created.
 Next step: PASS → name the screens not built yet and say "Run `f2f build --feature "<next name>" --repo .`, then prompt 2"; still FAIL → explain each remaining item and what I must decide.
 ```
@@ -328,17 +358,19 @@ The `<id>` values are the `#…` ids in `f2f/screens/<screen>.md`. The brief alr
 
 ## How the difference between Figma and your build is shown
 
-`verify` writes `f2f/verification/<screen>.md` (and `.json`):
+**See it in one page:** run `f2f report --open`. It opens `f2f/verification/index.html` in your browser: a table of every verified screen (PASS/FAIL), then one section per screen with **Figma, your app and the heatmap side by side**. Each wrong layer has a red box on Figma (where it should be) and on your app (where it is now), and a row in plain words such as "12px too short, 20px too low". Hover a row to find it on the images. "Overlay your app on Figma" has a slider to fade between the two. `f2f verify` refreshes this page after every run and prints its path.
+
+`verify` also writes `f2f/verification/<screen>.md` (and `.json`) for the agent:
 
 - **PASS or FAIL** at the top.
-- **Geometry:** every layer that is off by more than ±1 px, with Δx Δy Δw Δh, largest first. Example: `#12:40 Title  Δy +8  Δh -2` means the title sits 8 px too low and is 2 px too short.
+- **Geometry:** every layer that is off by more than ±1 px, with Δx Δy Δw Δh, largest first. Example: `#12:40 Title  Δy +8  Δh -2` means the title sits 8 px too low and is 2 px too short. Each layer is measured against its parent and the layer before it, so a section that is 20 px too tall is reported once, on that section, not on every layer below it.
 - **Style (web):** the exact computed font family, weight, italic, size and text colour of each tagged text, and the background colour and corner radius of each tagged box, against the Figma values. It also lists fonts anywhere on the page whose file is not loaded, so the browser fakes them (for example a slanted "italic"). These are numbers, so font rendering does not affect them.
 - **Code rules:** your source is scanned for Figma ids built with string maths (write them as literals) and for raw two-decimal box sizes or spacing copied from Figma (round them). Typography values such as letter-spacing keep their exact design values.
 - **Small screen (web):** the page is loaded again at 375 px wide; it fails if it scrolls sideways or cuts off text or images.
 - **Overflow:** text that is clipped.
 - **Coverage:** Figma layers that have no tag in your code, so they cannot be measured.
 - **Font-metric warnings:** Figma and browsers draw letters slightly differently, so text can be about 2 px narrower or wider and nudge its row neighbours sideways. These are warnings, not failures; do not add padding to "fix" them.
-- **Web only:** an app screenshot and a **diff image**. Red pixels are real differences from the Figma screenshot (edge-only anti-aliasing differences are ignored). It is a hint for images and icons, not a pass/fail.
+- **Web only:** an app screenshot and a **diff image** (the heatmap in the report page). Red pixels are real differences from the Figma screenshot (edge-only anti-aliasing differences are ignored). It is a hint for images and icons, not a pass/fail.
 
 You fix it, or give the report to the agent with prompt 3, and run `verify` again until it shows PASS.
 
@@ -348,10 +380,12 @@ On mobile (Android, iOS), styles are not measured as numbers yet: check colours 
 
 | I want to… | Command |
 |---|---|
+| See which version is installed | `f2f --version` (or `f2f -v`) |
 | Check an exported package | `f2f validate f2f` |
 | See what the tool detects in my repo | `f2f inspect --repo .` |
 | Write the brief for the agent | `f2f build --feature <name> --repo .` |
 | Compare the build with Figma | `f2f verify --screen <id> …` |
+| See every difference with images and heatmap | `f2f report --open` |
 | Re-generate outlines after updating the tool | `f2f refresh --package f2f` |
 | Measure size and tokens | `f2f bench --package f2f` |
 

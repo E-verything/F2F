@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { extname, join, relative, sep } from 'node:path';
 
@@ -84,6 +85,35 @@ function scanDart(file: string, src: string, map: RepoMap) {
   if (/void\s+main\s*\(/.test(src)) map.entryPoints.push(file);
 }
 
+// px from `14`, `'14px'` or `'0.875rem'` (16px root); null for anything relative or computed.
+const toPx = (v: string, num: string, unit = '') => (unit === 'rem' ? Number(num) * 16 : unit === 'px' || /^\d/.test(v) ? Number(num) : null);
+const WEIGHT_NAMES: Record<string, string> = { normal: '400', medium: '500', semibold: '600', bold: '700' };
+const textValue = (size: number, weight?: string, family?: string, italic?: boolean) =>
+  [italic && 'italic', weight && (WEIGHT_NAMES[weight.toLowerCase()] ?? weight), `${Math.round(size * 100) / 100}px`, family].filter(Boolean).join(' ');
+
+// Text styles kept in JS: theme objects (MUI/Chakra `h1: { fontSize, fontWeight }`), Tailwind v3 `fontSize` tuples, styled-components/emotion CSS.
+function scanJsTextStyles(file: string, src: string, map: RepoMap) {
+  const add = (name: string, value: string) => map.tokens.push({ name, kind: 'text-style', value, file });
+  for (const m of src.matchAll(/['"]?([\w-]+)['"]?\s*:\s*\{([^{}]*)\}/g)) {
+    const prop = (p: string) => new RegExp(`\\b${p}\\s*:\\s*(['"\`]?)([^,'"\`\\n}]+)\\1`).exec(m[2]!)?.[2]?.trim();
+    const sizeRaw = prop('fontSize'), weight = prop('fontWeight');
+    const s = sizeRaw && /^([\d.]+)(px|rem)?$/.exec(sizeRaw);
+    const size = s && toPx(sizeRaw!, s[1]!, s[2]);
+    // Inline style objects are one element's style, not a reusable text style.
+    if (size && weight && !['style', 'sx', 'css', 'styles'].includes(m[1]!)) add(m[1]!,textValue(size, weight, prop('fontFamily'), prop('fontStyle') === 'italic'));
+  }
+  if (/tailwind\.config\.[cm]?[jt]s$/.test(file))
+    for (const m of src.matchAll(/['"]?([\w-]+)['"]?\s*:\s*\[\s*['"]([\d.]+)(px|rem)['"]\s*,\s*(\{[^}]*\}|['"][^'"]*['"])\s*\]/g)) {
+      const size = toPx(m[2]!, m[2]!, m[3]);
+      if (size) add(`text-${m[1]}`, textValue(size, /fontWeight\s*:\s*['"]?(\w+)/.exec(m[4]!)?.[1]));
+    }
+  for (const m of src.matchAll(/(?:const|let)\s+(\w+)\s*=\s*(?:styled[\w.()'"]*|css)\s*`([^`]*)`/g)) {
+    const prop = (p: string) => new RegExp(`(?:^|[;\\s])${p}\\s*:\\s*([^;\\n]+)`).exec(m[2]!)?.[1]?.trim();
+    const s = /^([\d.]+)(px|rem)$/.exec(prop('font-size') ?? '');
+    if (s && prop('font-weight')) add(m[1]!, textValue(toPx(s[0], s[1]!, s[2])!, prop('font-weight'), prop('font-family'), prop('font-style') === 'italic'));
+  }
+}
+
 function scanWeb(file: string, src: string, map: RepoMap) {
   if (/\.(tsx|jsx|vue|svelte)$/.test(file)) {
     for (const m of src.matchAll(/export\s+(?:default\s+)?(?:function|const)\s+([A-Z]\w*)/g)) {
@@ -96,6 +126,15 @@ function scanWeb(file: string, src: string, map: RepoMap) {
   // CSS `font` shorthand variables (`--text-body: 400 14px/20px var(--font-inter)`) are the web's text styles.
   for (const m of src.matchAll(/--([\w-]+)\s*:\s*((?:italic\s+)?(\d00)\s+([\d.]+)px(?:\/[\d.]+px)?\s+[^;]+);/g))
     map.tokens.push({ name: `--${m[1]}`, kind: 'text-style', value: m[2]!.trim(), file });
+  // Text-style classes (`.type-body {…}`, Tailwind v4 `@utility type-body {…}`) with their own font-size and font-weight.
+  const cssVar = (v: string) => v.replace(/var\(\s*(--[\w-]+)[^)]*\)/g, (s, n) => new RegExp(`${n}\\s*:\\s*([^;]+);`).exec(src)?.[1] ?? s);
+  if (/\.s?css$/.test(file)) for (const m of src.matchAll(/(?:@utility\s+|\.)([\w-]+)\s*\{([^}]*)\}/g)) {
+    const prop = (p: string) => new RegExp(`(?:^|[;\\s])${p}\\s*:\\s*([^;]+)`).exec(m[2]!)?.[1]?.trim();
+    const size = prop('font-size'), weight = prop('font-weight');
+    if (!size?.endsWith('px') || !weight) continue;
+    map.tokens.push({ name: m[1]!, kind: 'text-style', value: [prop('font-style') === 'italic' && 'italic', weight, size, cssVar(prop('font-family') ?? '')].filter(Boolean).join(' '), file });
+  }
+  if (/\.[cm]?[jt]sx?$/.test(file)) scanJsTextStyles(file, src, map);
   for (const m of src.matchAll(/import\s*\{([^}]+)\}\s*from\s*['"]next\/font\/google['"]/g))
     map.fonts.push(...m[1]!.split(',').map((f) => f.trim().replace(/_/g, ' ')).filter(Boolean));
   for (const m of src.matchAll(/@font-face\s*\{[^}]*font-family:\s*['"]?([^;'"]+)/g)) map.fonts.push(m[1]!.trim());
@@ -157,6 +196,9 @@ export async function inspectRepo(root: string): Promise<RepoMap> {
     if (m) map.routes.push({ path: '/' + m[1]!.replace(/\/$/, ''), file: rel(f) });
     if (/^(?:src\/)?(app\/layout|pages\/_app)\.(tsx|jsx|ts|js)$/.test(rel(f))) map.entryPoints.push(rel(f));
   }
+  // An export unzipped under another folder name breaks every later `f2f` command that expects f2f/; say where it is.
+  const exports = files.map(rel).filter((p) => p.endsWith('/screens/index.json')).map((p) => p.slice(0, -'/screens/index.json'.length)).filter((d) => files.some((f) => rel(f) === `${d}/manifest.json`));
+  if (!existsSync(join(root, 'f2f', 'manifest.json'))) for (const d of exports) if (d !== 'f2f') map.limits.push(`F2F export found in ${d}/, not in f2f/: rename or move it so f2f/manifest.json exists, then re-run`);
   map.fonts = [...new Set(map.fonts)].sort();
   if (map.framework !== 'flutter' && map.assets.length) map.assetDirs = [...new Set(map.assets.map((a) => a.file.slice(0, a.file.lastIndexOf('/') + 1)))].sort();
   return map;

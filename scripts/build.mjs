@@ -11,5 +11,7 @@ const html = await readFile('packages/plugin/src/ui.html', 'utf8');
 // The plugin has no network access, so the logo is embedded as a data URI.
 const logo = `data:image/png;base64,${(await readFile('packages/plugin/assets/icon-128.png')).toString('base64')}`;
 await writeFile('packages/plugin/dist/ui.html', html.replace('/*LOGO*/', logo).replace('/*UI_SCRIPT*/', () => ui.outputFiles[0].text.replace(/<\/script/g, '<\\/script')));
-await build({ entryPoints: ['packages/cli/src/index.ts'], bundle: true, outfile: 'packages/cli/dist/index.js', platform: 'node', target: 'node22', format: 'esm', packages: 'external', banner: { js: '#!/usr/bin/env node' }, logLevel: 'warning' });
+// The published package version is the one `f2f --version` prints; read it here so a release bump needs no second edit.
+const { version } = JSON.parse(await readFile('packages/cli/package.json', 'utf8'));
+await build({ entryPoints: ['packages/cli/src/index.ts'], bundle: true, outfile: 'packages/cli/dist/index.js', platform: 'node', target: 'node22', format: 'esm', packages: 'external', banner: { js: '#!/usr/bin/env node' }, define: { F2F_VERSION: JSON.stringify(version) }, logLevel: 'warning' });
 console.log('built packages/plugin/dist/code.js, packages/plugin/dist/ui.html, packages/cli/dist/index.js');

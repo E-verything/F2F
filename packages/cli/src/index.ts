@@ -1,4 +1,5 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { join, relative, resolve, sep } from 'node:path';
 import { sha256 } from '../../core/src/hash';
 import { slugify } from '../../core/src/normalize';
@@ -6,12 +7,18 @@ import { screenOutline } from '../../core/src/outline';
 import { validatePackage } from '../../core/src/validate';
 import { compileFeature } from './repo/compile';
 import { inspectRepo } from './repo/inspect';
+import { writeReport } from './verify/html';
 import { verify } from './verify/run';
 import { bench } from './bench';
+
+// Set by scripts/build.mjs from packages/cli/package.json; 'dev' when run from source.
+declare const F2F_VERSION: string;
+const VERSION = typeof F2F_VERSION === 'string' ? F2F_VERSION : 'dev';
 
 const USAGE = `f2f <command>
 
 Commands:
+  --version, -v                        Print the installed f2f-cli version.
   validate <dir>                       Check a f2f package: schema, file hashes, and cross-references.
   inspect --repo <dir>                 Print what the tool detects in an app repository (read-only).
   build --feature <name> --repo <dir> [--package <dir>] [--name <brief name>]
@@ -27,7 +34,15 @@ Commands:
                                        Writes verification/<screen>.md/.json (+ app screenshot and visual diff for --url).
   verify --screens "<id>=<route>,…" --url <base url>
                                        Verify several web pages in one run, e.g. --screens "1:2=,1:567=services"
-                                       (routes without the leading slash; empty = home).`;
+                                       (routes without the leading slash; empty = home).
+  report [--package <dir>] [--open]    Write verification/index.html: every verified screen with Figma, your app and
+                                       the heatmap side by side, wrong layers boxed, and what is wrong in words.`;
+
+// Opens the report in the default browser; detached so the CLI exits at once.
+function openFile(path: string) {
+  const [bin, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '""', path]] : process.platform === 'darwin' ? ['open', [path]] : ['xdg-open', [path]];
+  spawn(bin, args, { detached: true, stdio: 'ignore', shell: false }).unref();
+}
 
 async function refreshOutlines(pkgDir: string, reuse?: Map<string, string>): Promise<number> {
   const index = JSON.parse(await readFile(join(pkgDir, 'screens/index.json'), 'utf8'));
@@ -63,6 +78,10 @@ function flags(argv: string[]): Record<string, string> {
 async function main(argv: string[]): Promise<number> {
   const [cmd, dir] = argv;
   const f = flags(argv.slice(1));
+  if (cmd && ['--version', '-v', '--v', '-V', 'version'].includes(cmd)) {
+    console.log(`f2f-cli ${VERSION}`);
+    return 0;
+  }
   if (cmd === 'validate' && dir) {
     const findings = validatePackage(await readTree(dir));
     for (const x of findings) console.log(`${x.severity.toUpperCase()} ${x.file}: ${x.message}`);
@@ -133,7 +152,16 @@ async function main(argv: string[]): Promise<number> {
       files.forEach((p) => console.log(`  ${p}`));
     }
     if (jobs.length > 1) console.log(`${jobs.length - failed}/${jobs.length} screens PASS`);
+    const { path } = await writeReport(resolve(f.package ?? 'f2f'));
+    console.log(`Report with images: ${path} (open it, or run f2f report --open)`);
     return failed ? 1 : 0;
+  }
+  if (cmd === 'report') {
+    const { path, screens } = await writeReport(resolve(f.package ?? 'f2f'));
+    if (!screens) { console.log('No verify results yet. Run f2f verify --screen <id> --url <url> first.'); return 1; }
+    console.log(`wrote ${path} (${screens} screen(s))`);
+    if (argv.includes('--open')) openFile(path);
+    return 0;
   }
   console.log(USAGE);
   return cmd ? 2 : 0;

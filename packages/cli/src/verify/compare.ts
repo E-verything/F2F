@@ -110,6 +110,16 @@ const hasText =(n: CanonNode | null): boolean => !!n && (n.type === 'TEXT' || !!
 
 const within = (a: Box, e: Box, t: number) => Math.abs(a.x - e.x) <= t && Math.abs(a.y - e.y) <= t && Math.abs(a.width - e.width) <= t && Math.abs(a.height - e.height) <= t;
 
+type Shift = { x: number; y: number };
+// Shifts of a measured box's start, centre and end edges: a child placed against any of them moves with it.
+const edgeShifts = (a: Box, e: Box): Shift[] => [
+  { x: a.x - e.x, y: a.y - e.y },
+  { x: a.x + a.width / 2 - e.x - e.width / 2, y: a.y + a.height / 2 - e.y - e.height / 2 },
+  { x: a.x + a.width - e.x - e.width, y: a.y + a.height - e.y - e.height },
+];
+// Per axis, the explained shift closest to the layer's own shift; what is left is the layer's own error.
+const closest = (v: number, options: number[]) => options.reduce((best, o) => (Math.abs(v - o) < Math.abs(v - best) ? o : best), 0);
+
 export function compare(screen: ScreenFile, m: Measurements, tolerancePx = 1): VerifyReport {
   const flat = flatten(screen.root);
   const byId = new Map(flat.map((f) => [f.node.id, f]));
@@ -120,19 +130,41 @@ export function compare(screen: ScreenFile, m: Measurements, tolerancePx = 1): V
   const styles: StyleMismatch[] = [];
   let styleChecked = 0;
   let passed = 0;
+  const expectedOf = (f: Flat | undefined) => f?.node.calculated?.screenBox ?? (f && f.depth === 0 ? { x: 0, y: 0, width: f.node.geometry.width, height: f.node.geometry.height } : undefined);
+  const actualOf = (id: string) => { const a = m.nodes[id]; return a && { x: round(a.x - origin.x), y: round(a.y - origin.y), width: round(a.width), height: round(a.height) }; };
+  // A shift already explained by the nearest measured ancestor or the previous measured sibling (flow) is reported once, at its cause, not on every layer below it.
+  const inherited = (f: Flat): Shift[] => {
+    const out: Shift[] = [];
+    let p = f.parent;
+    while (p && !m.nodes[p.id]) p = byId.get(p.id)?.parent ?? null;
+    const pe = p && expectedOf(byId.get(p.id)), pa = p && actualOf(p.id);
+    if (pe && pa) out.push(...edgeShifts(pa, pe));
+    if (f.parent && f.node.layout?.positioning !== 'absolute') {
+      const sibs = f.parent.children ?? [];
+      for (let i = sibs.indexOf(f.node) - 1; i >= 0; i--) {
+        const se = expectedOf(byId.get(sibs[i]!.id)), sa = actualOf(sibs[i]!.id);
+        if (se && sa) { out.push(...edgeShifts(sa, se)); break; }
+      }
+    }
+    return out;
+  };
   for (const [id, a] of Object.entries(m.nodes)) {
     const f = byId.get(id);
-    const e = f?.node.calculated?.screenBox ?? (f && f.depth === 0 ? { x: 0, y: 0, width: f.node.geometry.width, height: f.node.geometry.height } : undefined);
+    const e = expectedOf(f);
     if (!f || !e) continue;
     if (a.style) { styleChecked++; styles.push(...styleChecks(f.node, a.style, e)); }
-    const actual = { x: round(a.x - origin.x), y: round(a.y - origin.y), width: round(a.width), height: round(a.height) };
+    const actual = actualOf(id)!;
+    const shifts = inherited(f);
+    const sx = closest(actual.x - e.x, shifts.map((s) => s.x)), sy = closest(actual.y - e.y, shifts.map((s) => s.y));
+    // Compare against the design box moved by the explained shift, so only this layer's own error counts.
+    const moved = { ...e, x: e.x + sx, y: e.y + sy };
     // Some runtimes (Flutter semantics, native accessibility) report boxes clipped by ancestors; the clipped design box is equally correct.
     const visible = intersect(e, f.clip);
-    const delta = { x: round(actual.x - e.x), y: round(actual.y - e.y), width: round(actual.width - e.width), height: round(actual.height - e.height) };
+    const delta = { x: round(actual.x - moved.x), y: round(actual.y - moved.y), width: round(actual.width - e.width), height: round(actual.height - e.height) };
     const hugsText = f.node.type === 'TEXT' && /WIDTH/.test(f.node.text?.autoResize ?? '');
-    const onlyGlyphWidth = hugsText && within({ ...actual, width: e.width }, e, tolerancePx) && Math.abs(delta.width) <= Math.max(tolerancePx, e.width * TEXT_METRIC_SHARE);
+    const onlyGlyphWidth = hugsText && within({ ...actual, width: e.width }, moved, tolerancePx) && Math.abs(delta.width) <= Math.max(tolerancePx, e.width * TEXT_METRIC_SHARE);
     const textDrift = Math.abs(delta.y) <= tolerancePx && Math.abs(delta.height) <= tolerancePx && Math.abs(delta.x) <= TEXT_DRIFT_PX && Math.abs(delta.width) <= TEXT_DRIFT_PX && (hasText(f.parent ?? f.node) || hasText(f.parent ? byId.get(f.parent.id)?.parent ?? null : null));
-    if (within(actual, e, tolerancePx) || within(actual, visible, tolerancePx)) passed++;
+    if (within(actual, moved, tolerancePx) || within(actual, visible, tolerancePx)) passed++;
     else if (onlyGlyphWidth || textDrift) textMetrics.push({ id, name: f.node.name, expected: e, actual, delta });
     else mismatches.push({ id, name: f.node.name, expected: e, actual, delta });
   }
@@ -173,7 +205,7 @@ export function reportMarkdown(r: VerifyReport): string {
   ];
   if (r.visual) md.push(`Visual (supplementary, font rendering differs across engines): ${Math.round(r.visual.mismatchRatio * 1000) / 10}% of pixels differ${r.visual.diffImage ? `, diff image: ${r.visual.diffImage}` : ''}. ${r.visual.note}`, '');
   if (r.mismatches.length) {
-    md.push('## Fix these (largest first)', '', '| Layer | id | Expected x,y wxh | Actual x,y wxh | Δx Δy Δw Δh |', '|---|---|---|---|---|');
+    md.push('## Fix these (largest first)', '', 'Δ is this layer\'s own error: a shift its parent or the layer before it already explains is not counted again, so fix the listed layer itself.', '', '| Layer | id | Expected x,y wxh | Actual x,y wxh | Δx Δy Δw Δh |', '|---|---|---|---|---|');
     for (const x of r.mismatches.slice(0, 50))
       md.push(`| ${x.name} | ${x.id} | ${x.expected.x},${x.expected.y} ${x.expected.width}x${x.expected.height} | ${x.actual.x},${x.actual.y} ${x.actual.width}x${x.actual.height} | ${x.delta.x} ${x.delta.y} ${x.delta.width} ${x.delta.height} |`);
     if (r.mismatches.length > 50) md.push(`| … ${r.mismatches.length - 50} more in the JSON report | | | | |`);

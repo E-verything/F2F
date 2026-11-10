@@ -8,7 +8,10 @@ export interface CodeIssue { rule: string; file: string; line: number; text: str
 const SKIP_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', 'coverage', 'f2f', 'android', 'ios', '.dart_tool']);
 const SOURCE_EXT = new Set(['.tsx', '.jsx', '.ts', '.js', '.vue', '.svelte', '.css', '.scss', '.dart']);
 // Ids built from strings/arithmetic only look right by accident: Figma ids are not sequential.
-const COMPUTED_ID = /(data-figma-id|testID|identifier|testTag)\s*[=:]\s*\{?[^\n]*(split\(|\$\{[^}]*[+-]\s*\d|Number\()/;
+// Only the id's own value is checked (one brace/paren level deep), so a template in a later prop on the same line is not mistaken for it.
+const ID_VALUE = /(?:data-figma-id|testID|identifier|testTag)\s*[=:(]\s*(\{(?:[^{}\n]|\{[^{}\n]*\})*\}|\((?:[^()\n]|\([^()\n]*\))*\)|`[^`\n]*`|[^\s>,)]+)/g;
+const COMPUTED = /split\(|\$\{[^}]*[+-]\s*\d|Number\(/;
+const computedId = (text: string) => [...text.matchAll(ID_VALUE)].some((m) => COMPUTED.test(m[1]!));
 // A two-decimal box size or spacing is a raw Figma measurement copied to chase pixels; typography (letter-spacing, line-height) keeps its exact design values.
 const RAW_MEASUREMENT = /^\s*(padding|margin|width|height|min-width|min-height|max-width|max-height|top|right|bottom|left|inset|gap|row-gap|column-gap)(-[a-z]+)?\s*:[^;]*\b\d+\.\d{2,}px\b/;
 const MAX_ISSUES = 30;
@@ -27,7 +30,7 @@ export async function codeChecks(repoDir: string): Promise<CodeIssue[]> {
   for (const file of await sources(repoDir, repoDir, [])) {
     const lines = (await readFile(file, 'utf8')).split('\n');
     lines.forEach((text, i) => {
-      if (COMPUTED_ID.test(text)) issues.push({ rule: 'computed Figma id (write the id as a literal)', file: relative(repoDir, file).split(sep).join('/'), line: i + 1, text: text.trim().slice(0, 100) });
+      if (computedId(text)) issues.push({ rule: 'computed Figma id (write the id as a literal)', file: relative(repoDir, file).split(sep).join('/'), line: i + 1, text: text.trim().slice(0, 100) });
       else if (RAW_MEASUREMENT.test(text)) issues.push({ rule: 'raw sub-pixel value (round to whole px or a token)', file: relative(repoDir, file).split(sep).join('/'), line: i + 1, text: text.trim().slice(0, 100) });
     });
   }
