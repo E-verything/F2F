@@ -1,9 +1,9 @@
 import type { APIRoute } from 'astro';
-import { NAV, SITE } from '../site';
+import { NAV, SITE, url as path } from '../site';
 
 // AI-readable site index (llmstxt.org format); links are absolute only when SITE_URL is set.
 export const GET: APIRoute = ({ site }) => {
-  const url = (path: string) => (site ? new URL(path, site).href : path);
+  const url = (p: string) => (site ? new URL(p.startsWith(path('/')) ? p : path(p), site).href : p);
   const body = [
     `# ${SITE.name}`,
     '',

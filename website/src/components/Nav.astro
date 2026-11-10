@@ -1,5 +1,5 @@
 ---
-import { NAV, SITE } from '../site';
+import { NAV, SITE, url } from '../site';
 
 const path = Astro.url.pathname;
 const isActive = (href: string) => path === href || path.startsWith(`${href}/`);
@@ -7,8 +7,8 @@ const isActive = (href: string) => path === href || path.startsWith(`${href}/`);
 
 <header class="nav-wrap">
   <nav class="nav glass-card" aria-label="Primary">
-    <a href="/" class="brand" aria-label={`${SITE.name} home`}>
-      <img src="/logo.webp" alt="" width="32" height="32" class="logo" />
+    <a href={url("/")} class="brand" aria-label={`${SITE.name} home`}>
+      <img src={url("/logo.webp")} alt="" width="32" height="32" class="logo" />
       <span>{SITE.name}</span>
     </a>
 
@@ -20,7 +20,7 @@ const isActive = (href: string) => path === href || path.startsWith(`${href}/`);
       ))}
     </ul>
 
-    <a href="/docs" class="btn btn-primary nav-cta">Get started</a>
+    <a href={url("/docs")} class="btn btn-primary nav-cta">Get started</a>
 
     <button class="menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="drawer" data-menu>
       <span></span><span></span><span></span>
@@ -35,7 +35,7 @@ const isActive = (href: string) => path === href || path.startsWith(`${href}/`);
       {NAV.map((l) => (
         <li><a href={l.href} class:list={['drawer-link', { active: isActive(l.href) }]}>{l.label}</a></li>
       ))}
-      <li><a href="/docs" class="btn btn-primary drawer-cta">Get started</a></li>
+      <li><a href={url("/docs")} class="btn btn-primary drawer-cta">Get started</a></li>
     </ul>
   </div>
 </div>

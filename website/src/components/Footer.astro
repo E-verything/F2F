@@ -1,5 +1,5 @@
 ---
-import { SITE } from '../site';
+import { SITE, url } from '../site';
 
 const year = new Date().getFullYear();
 const repo = SITE.repoUrl;
@@ -8,23 +8,23 @@ const columns = [
   {
     title: 'Product',
     links: [
-      { href: '/how-it-works', label: 'How it works' },
-      { href: '/docs', label: 'Get started' },
-      { href: '/faq', label: 'FAQ' },
+      { href: url('/how-it-works'), label: 'How it works' },
+      { href: url('/docs'), label: 'Get started' },
+      { href: url('/faq'), label: 'FAQ' },
     ],
   },
   {
     title: 'Developers',
     links: [
-      { href: '/developers', label: 'Architecture' },
-      { href: '/docs#quick-reference', label: 'CLI reference' },
+      { href: url('/developers'), label: 'Architecture' },
+      { href: url('/docs#quick-reference'), label: 'CLI reference' },
       ...(repo ? [{ href: repo, label: 'Source code', external: true }, { href: `${repo}/issues`, label: 'Report a bug', external: true }] : []),
     ],
   },
   {
     title: 'Trust',
     links: [
-      { href: '/privacy', label: 'Privacy' },
+      { href: url('/privacy'), label: 'Privacy' },
       ...(repo ? [{ href: `${repo}/blob/main/LICENSE`, label: `License (${SITE.license})`, external: true }] : []),
     ],
   },
@@ -35,8 +35,8 @@ const columns = [
   <div class="container">
     <div class="grid">
       <div class="brand-col">
-        <a href="/" class="brand">
-          <img src="/logo.webp" alt="" width="40" height="40" loading="lazy" />
+        <a href={url("/")} class="brand">
+          <img src={url("/logo.webp")} alt="" width="40" height="40" loading="lazy" />
           <span>{SITE.name}</span>
         </a>
         <p>{SITE.tagline}</p>

@@ -7,6 +7,8 @@ const site = process.env.SITE_URL || undefined;
 
 export default defineConfig({
   site,
+  // A sub-path deploy (e.g. GitHub Pages at /F2F) sets BASE_PATH; a domain root needs nothing.
+  base: process.env.BASE_PATH || '/',
   trailingSlash: 'never',
   compressHTML: true,
   build: { inlineStylesheets: 'auto' },

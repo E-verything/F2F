@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { url } from '../site';
 import Icon from '../components/Icon.astro';
 import CopyCode from '../components/CopyCode.astro';
 
@@ -92,8 +93,8 @@ const howToJsonLd = {
     </section>
 
     <footer class="cta-row page-cta">
-      <a href="/docs" class="btn btn-primary">Start the quick start <Icon name="arrow" size={18} /></a>
-      <a href="/faq" class="btn btn-ghost">Read the FAQ</a>
+      <a href={url("/docs")} class="btn btn-primary">Start the quick start <Icon name="arrow" size={18} /></a>
+      <a href={url("/faq")} class="btn btn-ghost">Read the FAQ</a>
     </footer>
   </article>
   <CopyCode />
