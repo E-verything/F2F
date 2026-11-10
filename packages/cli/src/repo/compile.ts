@@ -276,6 +276,7 @@ function render(d: any): string {
   const verifyCmd = (id: string) => d.tagging.verify.replace('<id>', id).replace('<port>', port);
   md.push('## Tag, run, verify', '', d.tagging.how, '', d.tagging.snippet.replace(/869:16072/g, firstId), '', `Run: ${d.tagging.run}`, '', 'Verify each screen (replace `<route>` with the route you gave it):', '', ...d.screens.map((s: any) => `- ${s.name}: ${verifyCmd(s.id)}`), '',
     // One run for all web screens saves the agent a command and a summary per page.
+    ...(d.tagging.verify.includes('--url http') ? ['Every page with a route on the "Screen → route" line of f2f-project.md: `f2f verify --all` (writes the report page too).', ''] : []),
     ...(d.screens.length > 1 && d.tagging.verify.includes('--url http') ? [`All at once: \`f2f verify --screens "${d.screens.map((s: any) => `${s.id}=<route>`).join(',')}" --url http://localhost:${port}\` (routes without the leading slash, empty for the home page)`, ''] : []),
     'Fix the largest mismatches first and re-run.', '');
   md.push('## Screens', '', ...d.screens.map((s: any) => `- ${s.name} (id \`${s.id}\`) — ${s.viewport.width}x${s.viewport.height}, approval ${s.status.value}: [outline](../${s.outline})`), '');

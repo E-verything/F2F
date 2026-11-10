@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { join, relative, resolve, sep } from 'node:path';
+import { createInterface } from 'node:readline/promises';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { sha256 } from '../../core/src/hash';
 import { slugify } from '../../core/src/normalize';
 import { screenOutline } from '../../core/src/outline';
@@ -8,6 +9,7 @@ import { validatePackage } from '../../core/src/validate';
 import { compileFeature } from './repo/compile';
 import { inspectRepo } from './repo/inspect';
 import { writeReport } from './verify/html';
+import { parseChoice, profileUrl, resolveRoutes, saveRoutes } from './verify/routes';
 import { verify } from './verify/run';
 import { bench } from './bench';
 
@@ -28,6 +30,11 @@ Commands:
   bench [--package <dir>] [--repo <dir> --feature <name>]
                                        Measure package size, estimated tokens, validate/inspect/brief time and memory.
   refresh [--package <dir>]            Regenerate screen outlines from the package JSON with this tool version.
+  verify [--url <base url>] [--all] [--open]
+                                       Web: pick pages from a numbered list (or Enter for all), verify them and write
+                                       the report. Routes come from the "Screen → route" line of f2f-project.md,
+                                       earlier runs, or your app's routes; the URL from its "App URL" line.
+                                       --all (and any run without a terminal, e.g. an agent) verifies every page.
   verify --screen <id|slug> [--package <dir>] (--url <url> | --android | --ios | --measurements <json>)
          [--device <serial|udid>] [--tolerance 1] [--window 590x1044] [--no-screenshot]
                                        Measure the running app's figma-tagged layers and compare with the design.
@@ -128,32 +135,79 @@ async function main(argv: string[]): Promise<number> {
     console.log(`regenerated ${n} screen outline(s) with this version of the tool`);
     return 0;
   }
-  if (cmd === 'verify' && (f.screen || (f.screens && f.url))) {
+  // Plain `f2f verify` (web): every screen that has a route, at the URL from f2f-project.md.
+  const allScreens = !f.screen && !f.screens && !f.measurements && !argv.includes('--android') && !argv.includes('--ios');
+  if (cmd === 'verify' && (f.screen || f.screens || allScreens)) {
     const win = f.window?.split('x').map(Number);
+    const pkgDir = resolve(f.package ?? 'f2f');
+    const repoDir = dirname(pkgDir);
+    const base = f.url ?? (f.screens || allScreens ? profileUrl(await readFile(join(repoDir, 'f2f-project.md'), 'utf8').catch(() => '')) : undefined);
+    if ((f.screens || allScreens) && !base) throw new Error('No app URL. Start your app, then run: f2f verify --url http://localhost:<port> (or write it on the "App URL" line of f2f-project.md).');
+    // A server that is not running would fail every page the same way; say it once, before any work.
+    if (base && (f.screens || allScreens) && !(await fetch(base, { signal: AbortSignal.timeout(10_000) }).then(() => true, () => false)))
+      throw new Error(`Your app is not running at ${base}. Start it (e.g. npm run dev), then run f2f verify again.`);
+    let auto: { screen: string; url: string }[] | null = null;
+    if (allScreens) {
+      const index = JSON.parse(await readFile(join(pkgDir, 'screens/index.json'), 'utf8'));
+      const { routes, missing } = await resolveRoutes(pkgDir, repoDir, index.screens, async () => (await inspectRepo(repoDir)).routes.map((r) => r.path));
+      for (const [id, r] of routes) if (r.source === 'app route') console.log(`route for ${index.screens.find((s: any) => s.id === id).name}: /${r.route} (guessed from your app's routes; fix it on the "Screen → route" line of f2f-project.md if wrong)`);
+      if (missing.length) console.log(`Skipped, no route known: ${missing.map((s) => `${s.name} (${s.id})`).join(', ')}. To verify one, add "<screen name> → /<route>" to the "Screen → route" line of f2f-project.md.`);
+      if (!routes.size) throw new Error('No screen has a route yet. Add them to the "Screen → route" line of f2f-project.md, e.g. "Landing Page → /, Contact Us → /contact".');
+      const pages = index.screens.filter((s: any) => routes.has(s.id)) as { id: string; name: string }[];
+      // A person at a terminal picks pages; an agent or CI (no terminal) or --all gets every page, so it never waits for input.
+      let chosen = pages;
+      if (!argv.includes('--all') && process.stdin.isTTY && pages.length > 1) {
+        const width = Math.max(...pages.map((p) => p.name.length));
+        console.log('\nWhich pages do you want to verify?');
+        pages.forEach((p, i) => console.log(`  ${String(i + 1).padStart(2)}  ${p.name.padEnd(width)}  /${routes.get(p.id)!.route}`));
+        console.log(`  ${String(pages.length + 1).padStart(2)}  All pages`);
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        let pick: number[] | null = null;
+        while (!pick) {
+          pick = parseChoice(await rl.question('Type numbers (e.g. 3 or 2,3) or press Enter for all: '), pages.length);
+          if (!pick) console.log(`Use numbers from 1 to ${pages.length + 1}, separated by commas.`);
+        }
+        rl.close();
+        chosen = pick.map((i) => pages[i]!);
+      }
+      auto = chosen.map((p) => ({ screen: p.id, url: new URL(routes.get(p.id)!.route, base!.replace(/\/*$/, '/')).href }));
+    }
     // --screens "1:2=/,1:567=/services" verifies several pages against one base --url in a single run.
-    const jobs = f.screens
+    const jobs = auto ?? (f.screens
       ? f.screens.split(',').map((p) => p.trim().split('=')).map(([id, route = '']) => {
           // Git Bash rewrites "/route" into a Windows path, so routes are written without the leading slash.
           if (/^[a-z]:[\\/]/i.test(route.trim())) throw new Error(`Route "${route}" became a file path (Git Bash does this to "/…"). Write routes without the leading slash: --screens "${id}=${route.replace(/^.*[\\/]/, '')}"`);
-          return { screen: id!.trim(), url: new URL(route.trim().replace(/^\/+/, ''), f.url!.replace(/\/*$/, '/')).href };
+          return { screen: id!.trim(), url: new URL(route.trim().replace(/^\/+/, ''), base!.replace(/\/*$/, '/')).href };
         })
-      : [{ screen: f.screen!, url: f.url }];
+      : [{ screen: f.screen!, url: f.url }]);
     let failed = 0;
+    const done = new Set<string>();
     for (const job of jobs) {
-      const { report, files } = await verify({
-        pkgDir: resolve(f.package ?? 'f2f'), screen: job.screen, url: job.url, measurementsFile: f.measurements,
+      // One page that cannot be measured (wrong route, server down) must not hide the results of the others.
+      const run = await verify({
+        pkgDir, screen: job.screen, url: job.url, measurementsFile: f.measurements,
         android: argv.includes('--android'), ios: argv.includes('--ios'), device: f.device,
         tolerancePx: f.tolerance ? Number(f.tolerance) : undefined, screenshot: !argv.includes('--no-screenshot'),
         window: win?.length === 2 ? { width: win[0]!, height: win[1]! } : undefined,
+      }).catch((e: unknown) => {
+        if (jobs.length === 1) throw e;
+        console.log(`[${job.screen} ${job.url}] ERROR: ${e instanceof Error ? e.message : String(e)}`);
+        return null;
       });
+      if (!run) { failed++; continue; }
+      const { report, files } = run;
       const s = report.summary;
+      done.add(report.screen.id);
       if (s.verdict !== 'pass') failed++;
       console.log(`${jobs.length > 1 ? `[${job.screen} ${job.url}] ` : ''}${s.verdict.toUpperCase()}: ${s.passed}/${s.measured} layers within ±${report.tolerancePx}px, ${s.failed} off, ${s.styleFailed} style diffs, ${report.code?.length ?? 0} code-rule issues, ${s.textMetrics} font-metric warnings, ${s.overflow} overflow, ${s.missingKey} required layers untagged${report.narrow ? `, small screen ${report.narrow.width}px ${report.narrow.ok ? 'OK' : 'FAIL'}` : ''}${report.visual && !Number.isNaN(report.visual.mismatchRatio) ? `, visual diff ${(report.visual.mismatchRatio * 100).toFixed(1)}%` : ''}`);
       files.forEach((p) => console.log(`  ${p}`));
+      // Remember where this screen lives, so next time plain `f2f verify` finds it.
+      if (job.url) { const u = new URL(job.url); await saveRoutes(pkgDir, { [report.screen.id]: u.pathname.replace(/^\/+/, '') + u.search + u.hash }); }
     }
     if (jobs.length > 1) console.log(`${jobs.length - failed}/${jobs.length} screens PASS`);
-    const { path } = await writeReport(resolve(f.package ?? 'f2f'));
-    console.log(`Report with images: ${path} (open it, or run f2f report --open)`);
+    const { path } = await writeReport(pkgDir, done);
+    console.log(`Report with images for these ${done.size} page(s): ${path}`);
+    if (argv.includes('--open')) openFile(path);
     return failed ? 1 : 0;
   }
   if (cmd === 'report') {

@@ -1,11 +1,11 @@
 import { existsSync } from 'node:fs';
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Mismatch, VerifyReport } from './compare';
 
 // One self-contained HTML page over every verify run in the package: no network, images by relative path, opens from disk.
 
-interface ScreenReport { slug: string; report: VerifyReport; origin: { x: number; y: number }; figma: string | null; app: string | null; diff: string | null }
+interface ScreenReport { when?: string; slug: string; report: VerifyReport; origin: { x: number; y: number }; figma: string | null; app: string | null; diff: string | null }
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -20,7 +20,7 @@ export function describe(m: Pick<Mismatch, 'delta'>): string {
   return out.join(', ') || 'within 1–2px';
 }
 
-export async function loadReports(pkgDir: string): Promise<ScreenReport[]> {
+export async function loadReports(pkgDir: string, only?: Set<string>): Promise<ScreenReport[]> {
   const dir = join(pkgDir, 'verification');
   if (!existsSync(dir)) return [];
   const assets = JSON.parse(await readFile(join(pkgDir, 'assets/manifest.json'), 'utf8').catch(() => '{"assets":[]}')).assets as any[];
@@ -30,10 +30,12 @@ export async function loadReports(pkgDir: string): Promise<ScreenReport[]> {
     const j = JSON.parse(await readFile(join(dir, f), 'utf8'));
     if (!j.report?.screen) continue;
     const report = j.report as VerifyReport;
+    if (only && !only.has(report.screen.id)) continue;
+    const when = (await stat(join(dir, f))).mtime.toLocaleString();
     const o = j.measurements?.nodes?.[report.screen.id];
     const ref = assets.find((a) => a.role === 'screenshot' && a.sourceNodeIds?.includes(report.screen.id));
     const has = (p: string) => existsSync(join(dir, p)) ? p : null;
-    out.push({ slug, report, origin: { x: o?.x ?? 0, y: o?.y ?? 0 }, figma: ref && existsSync(join(pkgDir, ref.file)) ? `../${ref.file}` : null, app: has(`${slug}.app.png`), diff: has(`${slug}.diff.png`) });
+    out.push({ when, slug, report, origin: { x: o?.x ?? 0, y: o?.y ?? 0 }, figma: ref && existsSync(join(pkgDir, ref.file)) ? `../${ref.file}` : null, app: has(`${slug}.app.png`), diff: has(`${slug}.diff.png`) });
   }
   return out;
 }
@@ -54,7 +56,7 @@ function screenSection(s: ScreenReport, i: number): string {
     ['Page size', `${r.viewport.actual.width}×${r.viewport.actual.height} (design ${r.viewport.expected.width}×${r.viewport.expected.height})`, r.viewport.ok],
   ] as const;
   return `<section id="s${i}" data-vw="${vw}">
-<h2>${badge(sm.verdict)} ${esc(r.screen.name)} <small>${esc(r.screen.id)}</small></h2>
+<h2>${badge(sm.verdict)} ${esc(r.screen.name)} <small>${esc(r.screen.id)}${s.when ? ` · verified ${esc(s.when)}` : ''}</small></h2>
 <ul class="checks">${checks.map(([k, v, ok]) => `<li class="${ok ? 'ok' : 'bad'}"><b>${k}</b>${esc(v)}</li>`).join('')}${r.visual && !Number.isNaN(r.visual.mismatchRatio) ? `<li><b>Pixels differing</b>${Math.round(r.visual.mismatchRatio * 1000) / 10}% (guide only)</li>` : ''}</ul>
 <div class="shots">${img(s.figma, 'Figma', 'figma', 'red box = where the layer should be')}${img(s.app, 'Your app', 'app', 'red box = where it is now')}${img(s.diff, 'Heatmap', 'diff', 'red = pixels that differ from Figma')}</div>
 ${s.figma && s.app ? `<details class="onion"><summary>Overlay your app on Figma</summary><label>Figma <input type="range" min="0" max="100" value="50"> Your app</label><div class="stack"><img src="${esc(s.figma)}" alt=""><img class="top" src="${esc(s.app)}" alt=""></div></details>` : ''}
@@ -84,7 +86,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;p
 .stack{position:relative;max-height:80vh;overflow:auto;border:1px solid var(--line);border-radius:8px}.stack img{display:block;width:100%}.stack .top{position:absolute;inset:0 auto auto 0;opacity:.5}
 code{font-size:12px}a{color:inherit}
 </style></head><body><main>
-<h1>F2F verify report</h1><p class="note">${pass}/${screens.length} screens pass. Made by <code>f2f report</code> from f2f/verification. Re-run <code>f2f verify</code>, then <code>f2f report</code> to refresh.</p>
+<h1>F2F verify report</h1><p class="note">${pass}/${screens.length} screens pass. Each section shows when that page was verified. Run <code>f2f verify</code> again after changing code; <code>f2f report</code> shows every page verified so far.</p>
 <div class="summary"><table><thead><tr><th>Screen</th><th>Result</th><th>Layers in place</th><th>Style diffs</th><th>Small screen</th><th>Pixels differing</th></tr></thead><tbody>${screens.map((s, i) => { const r = s.report, sm = r.summary; return `<tr><td><a href="#s${i}">${esc(r.screen.name)}</a></td><td>${badge(sm.verdict)}</td><td>${sm.passed}/${sm.measured}</td><td>${sm.styleFailed}</td><td>${r.narrow ? (r.narrow.ok ? 'OK' : 'FAIL') : '—'}</td><td>${r.visual && !Number.isNaN(r.visual.mismatchRatio) ? `${Math.round(r.visual.mismatchRatio * 1000) / 10}%` : '—'}</td></tr>`; }).join('')}</tbody></table></div>
 ${screens.length ? screens.map(screenSection).join('\n') : '<section><p>No verify results yet. Run <code>f2f verify --screen &lt;id&gt; --url &lt;url&gt;</code> first.</p></section>'}
 </main><script>
@@ -100,8 +102,9 @@ for(const sec of document.querySelectorAll('section[data-vw]')){
 `;
 }
 
-export async function writeReport(pkgDir: string): Promise<{ path: string; screens: number }> {
-  const screens = await loadReports(pkgDir);
+// `only`: the screens verified in this run, so the page shows exactly what was just checked against the current code.
+export async function writeReport(pkgDir: string, only?: Set<string>): Promise<{ path: string; screens: number }> {
+  const screens = await loadReports(pkgDir, only);
   const path = join(pkgDir, 'verification', 'index.html');
   if (existsSync(join(pkgDir, 'verification'))) await writeFile(path, reportHtml(screens));
   return { path, screens: screens.length };

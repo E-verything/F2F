@@ -344,7 +344,15 @@ Paste prompt 2 from [Copy-paste prompts for your AI agent](#copy-paste-prompts-f
 
 ### Step 4: Verify the build against Figma (1 to 2 min)
 
-Start your app, then run the command for your platform:
+**Web apps: one command.** Start your app, then run:
+
+```bash
+f2f verify --open
+```
+
+It lists your pages with a number each, plus "All pages". Type `3` for one page, `2,3` for two, or press Enter for all. It checks the chosen pages against your running app (your latest code), then opens the report for exactly those pages. Routes come from the "Screen → route" line of `f2f-project.md` (and from earlier runs or your app's routes when a page is missing there); the URL comes from its "App URL" line. An agent or CI has no keyboard, so there `f2f verify` checks every page; `f2f verify --all` does the same in your terminal.
+
+Per screen, or for mobile, run the command for your platform:
 
 | Your app | Tag each element with | Run |
 |---|---|---|
@@ -358,7 +366,7 @@ The `<id>` values are the `#…` ids in `f2f/screens/<screen>.md`. The brief alr
 
 ## How the difference between Figma and your build is shown
 
-**See it in one page:** run `f2f report --open`. It opens `f2f/verification/index.html` in your browser: a table of every verified screen (PASS/FAIL), then one section per screen with **Figma, your app and the heatmap side by side**. Each wrong layer has a red box on Figma (where it should be) and on your app (where it is now), and a row in plain words such as "12px too short, 20px too low". Hover a row to find it on the images. "Overlay your app on Figma" has a slider to fade between the two. `f2f verify` refreshes this page after every run and prints its path.
+**See it in one page:** `f2f verify --open` opens the report for the pages you just checked; `f2f report --open` shows every page checked so far. It opens `f2f/verification/index.html` in your browser: a table of every verified screen (PASS/FAIL), then one section per screen with **Figma, your app and the heatmap side by side**. Each wrong layer has a red box on Figma (where it should be) and on your app (where it is now), and a row in plain words such as "12px too short, 20px too low". Hover a row to find it on the images. "Overlay your app on Figma" has a slider to fade between the two. Each section shows when that page was verified.
 
 `verify` also writes `f2f/verification/<screen>.md` (and `.json`) for the agent:
 
@@ -384,7 +392,8 @@ On mobile (Android, iOS), styles are not measured as numbers yet: check colours 
 | Check an exported package | `f2f validate f2f` |
 | See what the tool detects in my repo | `f2f inspect --repo .` |
 | Write the brief for the agent | `f2f build --feature <name> --repo .` |
-| Compare the build with Figma | `f2f verify --screen <id> …` |
+| Compare the build with Figma (web, pick pages, open report) | `f2f verify --open` |
+| Compare one screen, or on mobile | `f2f verify --screen <id> …` |
 | See every difference with images and heatmap | `f2f report --open` |
 | Re-generate outlines after updating the tool | `f2f refresh --package f2f` |
 | Measure size and tokens | `f2f bench --package f2f` |
