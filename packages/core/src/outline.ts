@@ -10,8 +10,20 @@ function paintStr(p: Paint, assetPath: (id: string) => string): string {
   const hidden = p.visible === false ? '(hidden)' : '';
   if (p.type === 'solid') return `${p.color}${tok(p.variable)}${op}${hidden}`;
   if (p.type === 'gradient') return `${p.kind}-gradient(${p.stops.map((s) => `${s.color}${s.alpha !== 1 ? `@${fmt(s.alpha)}` : ''} ${fmt(s.position * 100)}%`).join(', ')})${op}${hidden}`;
-  if (p.type === 'image') return `image(${p.assetId ? assetPath(p.assetId) : 'MISSING'} ${p.scaleMode.toLowerCase()})${op}${hidden}`;
+  if (p.type === 'image') return `image(${p.assetId ? assetPath(p.assetId) : 'MISSING'} ${p.scaleMode.toLowerCase()}${cropCss(p) ? ` → ${cropCss(p)}` : ''})${op}${hidden}`;
   return `unsupported-${p.sourceType}`;
+}
+
+// Figma's crop transform [[sx,0,tx],[0,sy,ty]] shows the part of the image from (tx, ty) sized sx × sy (fractions of the image).
+// Without it a plain object-fit: cover centres the image and shows a different part; this is the CSS that shows the same part.
+export function cropCss(p: Paint): string | null {
+  if (p.type !== 'image' || p.scaleMode !== 'CROP' || !p.transform) return null;
+  const [[sx = 1, , tx = 0] = [], [, sy = 1, ty = 0] = []] = p.transform;
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
+  const pos = (t: number, s: number) => (s < 0.999 ? pct(Math.min(1, Math.max(0, t / (1 - s)))) : '50%');
+  // One full side means the crop is what object-fit: cover does, anchored at this position; both cropped means it is also zoomed.
+  if (sx >= 0.999 || sy >= 0.999) return `object-fit: cover; object-position: ${pos(tx, sx)} ${pos(ty, sy)}`;
+  return `zoomed crop: image ${pct(1 / sx)} × ${pct(1 / sy)} of the box, offset ${pct(-tx / sx)} ${pct(-ty / sy)} (clip the box)`;
 }
 
 function effectStr(e: Effect): string {

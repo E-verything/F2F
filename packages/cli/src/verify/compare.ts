@@ -3,11 +3,17 @@ import type { Box, CanonNode, ScreenFile } from '../../../core/src/model';
 // Framework-neutral comparison: any runtime (browser, Flutter test, native) that reports boxes per Figma node id can be verified here.
 
 export interface MeasuredStyle { fontFamily: string; fontWeight: number; fontStyle: string; fontSize: number; color: string; background: string; radius: number; fontLoaded: boolean; hasText?: boolean }
-export interface Measured { x: number; y: number; width: number; height: number; overflow?: boolean; text?: string; style?: MeasuredStyle }
+// loose: measured from rendered text (line boxes), not a tagged element, so it gets the font-metric tolerance.
+export interface Measured { x: number; y: number; width: number; height: number; overflow?: boolean; text?: string; style?: MeasuredStyle; loose?: boolean }
 export interface StyleMismatch { id: string; name: string; property: string; expected: string; actual: string }
-export interface Measurements { screenId: string; source: string; viewport: { width: number; height: number }; nodes: Record<string, Measured>; narrow?: Narrow; fakedFonts?: string[] }
+export interface Measurements { screenId: string; source: string; viewport: { width: number; height: number }; nodes: Record<string, Measured>; narrow?: Narrow; fakedFonts?: string[]; lines?: Record<string, TextBlock[]>; assets?: Record<string, Box[]> }
+// Every visible element showing a design text, keyed by the text without spaces, lowercased.
+export interface TextBlock { x: number; y: number; lines: string[]; width?: number; left?: number; right?: number; top?: number; bottom?: number; style?: { fontFamily: string; fontSize: number; fontWeight: number; fontStyle: string; color: string; letterSpacing: number; textTransform?: string; textDecoration?: string } }
 export interface Narrow { width: number; scrollWidth: number; cutOff: string[] }
 
+export interface Finding { n: number; severity: 'fix' | 'check'; kind: string; id: string; name: string; what: string; fix: string; box: Box; actual?: Box; crop: string }
+export interface Hotspot { id: string; name: string; kind: 'text' | 'image' | 'icon'; share: number; box: Box; text?: string }
+export interface LineMismatch { id: string; name: string; kind?: 'lines' | 'align'; figma: string[]; app: string[]; hint?: string; box?: Box; dx?: number; text?: string }
 export interface Mismatch { id: string; name: string; expected: Box; actual: Box; delta: { x: number; y: number; width: number; height: number } }
 export interface VerifyReport {
   screen: { id: string; name: string };
@@ -23,7 +29,9 @@ export interface VerifyReport {
   unknownIds: string[];
   narrow?: Narrow & { ok: boolean };
   code?: { rule: string; file: string; line: number; text: string }[];
-  visual?: { mismatchRatio: number; diffImage: string | null; note: string };
+  visual?: { mismatchRatio: number; noiseRatio?: number; diffImage: string | null; note: string; hotspots?: Hotspot[] };
+  lines?: LineMismatch[];
+  findings?: Finding[];
 }
 
 // A text layer whose box hugs its content may differ by this share of its width from glyph-advance differences between font builds/engines.
@@ -32,6 +40,8 @@ export const TEXT_METRIC_SHARE = 0.05;
 export const TEXT_DRIFT_PX = 3;
 // Layers deeper than this are optional to tag; only shallower ones count as missing coverage.
 export const REQUIRED_DEPTH = 2;
+// Text measured from its line boxes: glyph metrics differ between Figma and browsers by up to a few px.
+const TEXT_BOX_TOLERANCE_PX = 3;
 const round = (n: number) => Math.round(n * 100) / 100;
 
 interface Flat { node: CanonNode; depth: number; clip: Box; parent: CanonNode | null }
@@ -139,12 +149,19 @@ export function compare(screen: ScreenFile, m: Measurements, tolerancePx = 1): V
     while (p && !m.nodes[p.id]) p = byId.get(p.id)?.parent ?? null;
     const pe = p && expectedOf(byId.get(p.id)), pa = p && actualOf(p.id);
     if (pe && pa) out.push(...edgeShifts(pa, pe));
-    if (f.parent && f.node.layout?.positioning !== 'absolute') {
-      const sibs = f.parent.children ?? [];
-      for (let i = sibs.indexOf(f.node) - 1; i >= 0; i--) {
-        const se = expectedOf(byId.get(sibs[i]!.id)), sa = actualOf(sibs[i]!.id);
-        if (se && sa) { out.push(...edgeShifts(sa, se)); break; }
-      }
+    // The layer before it in the flow: a measured sibling, or the last measured layer inside one (an icon wrapped in its own container),
+    // climbing through untagged wrappers up to the measured ancestor.
+    const lastMeasured = (n: CanonNode): CanonNode | null => {
+      for (const c of [...(n.children ?? [])].reverse()) { const hit = lastMeasured(c); if (hit) return hit; }
+      return m.nodes[n.id] ? n : null;
+    };
+    for (let cur: Flat | undefined = f; cur?.parent && cur.node.layout?.positioning !== 'absolute'; cur = byId.get(cur.parent.id)) {
+      const sibs = cur.parent.children ?? [];
+      let prev: CanonNode | null = null;
+      for (let i = sibs.indexOf(cur.node) - 1; i >= 0 && !prev; i--) prev = lastMeasured(sibs[i]!);
+      const se = prev && expectedOf(byId.get(prev.id)), sa = prev && actualOf(prev.id);
+      if (se && sa) { out.push(...edgeShifts(sa, se)); break; }
+      if (cur.parent === p) break;
     }
     return out;
   };
@@ -164,7 +181,8 @@ export function compare(screen: ScreenFile, m: Measurements, tolerancePx = 1): V
     const hugsText = f.node.type === 'TEXT' && /WIDTH/.test(f.node.text?.autoResize ?? '');
     const onlyGlyphWidth = hugsText && within({ ...actual, width: e.width }, moved, tolerancePx) && Math.abs(delta.width) <= Math.max(tolerancePx, e.width * TEXT_METRIC_SHARE);
     const textDrift = Math.abs(delta.y) <= tolerancePx && Math.abs(delta.height) <= tolerancePx && Math.abs(delta.x) <= TEXT_DRIFT_PX && Math.abs(delta.width) <= TEXT_DRIFT_PX && (hasText(f.parent ?? f.node) || hasText(f.parent ? byId.get(f.parent.id)?.parent ?? null : null));
-    if (within(actual, moved, tolerancePx) || within(actual, visible, tolerancePx)) passed++;
+    const tol = a.loose ? Math.max(tolerancePx, TEXT_BOX_TOLERANCE_PX) : tolerancePx;
+    if (within(actual, moved, tol) || within(actual, visible, tol)) passed++;
     else if (onlyGlyphWidth || textDrift) textMetrics.push({ id, name: f.node.name, expected: e, actual, delta });
     else mismatches.push({ id, name: f.node.name, expected: e, actual, delta });
   }
@@ -195,6 +213,172 @@ export function compare(screen: ScreenFile, m: Measurements, tolerancePx = 1): V
   };
 }
 
+// Layers whose own area holds the most real pixel differences, tagged or not: the brief's outline gives every layer's box, so no tag is needed to point at it.
+const HOTSPOT_MIN_AREA = 100;
+const HOTSPOT_MIN_TEXT_AREA = 300;
+const HOTSPOT_MIN_SHARE = 0.15;
+const HOTSPOT_MAX = 15;
+export function hotspots(screen: ScreenFile, mask: Uint8Array, width: number, height: number): Hotspot[] {
+  const out: Hotspot[] = [];
+  for (const f of flatten(screen.root)) {
+    const n = f.node, b = n.calculated?.screenBox;
+    const image = Array.isArray(n.style?.fills) && n.style!.fills.some((p: any) => p.type === 'image' && p.visible !== false);
+    const kind = n.type === 'TEXT' ? 'text' : image ? 'image' : n.asset || VECTOR_TYPES.has(n.type) ? 'icon' : null;
+    // Tiny text (a digit in a badge) differs mostly by glyph smoothing, so it needs a larger area to mean anything.
+    if (!kind || !b || b.width * b.height < (kind === 'text' ? HOTSPOT_MIN_TEXT_AREA : HOTSPOT_MIN_AREA)) continue;
+    const box = intersect(b, f.clip);
+    const x0 = Math.max(0, Math.floor(box.x)), y0 = Math.max(0, Math.floor(box.y)), x1 = Math.min(width, Math.ceil(box.x + box.width)), y1 = Math.min(height, Math.ceil(box.y + box.height));
+    let bad = 0, all = 0;
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { all++; bad += mask[y * width + x]!; }
+    if (all && bad / all >= HOTSPOT_MIN_SHARE) out.push({ id: n.id, name: n.name, kind, share: round(bad / all), box: b, ...(n.type === 'TEXT' ? { text: n.text?.characters.replace(/\n/g, ' / ').slice(0, 80) } : {}) });
+  }
+  return out.sort((a, b) => b.share - a.share).slice(0, HOTSPOT_MAX);
+}
+
+// Each design text with the app element showing it: the nearest one to where Figma draws it, so repeated texts pair with the right copy.
+const TEXT_PAIR_MAX_PX = 300;
+export function pairTexts(screen: ScreenFile, blocks: Record<string, TextBlock[]>, origin: { x: number; y: number }): { n: CanonNode; b: Box; near: TextBlock }[] {
+  const key = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+  const used = new Set<TextBlock>(), out: { n: CanonNode; b: Box; near: TextBlock }[] = [];
+  for (const f of flatten(screen.root)) {
+    const n = f.node, b = n.calculated?.screenBox;
+    if (n.type !== 'TEXT' || !n.text?.characters || !b) continue;
+    const dist = (c: TextBlock) => Math.hypot(c.x - origin.x - b.x, c.y - origin.y - b.y);
+    // Too far away is another copy of the same words (a year in a form and in the footer), not this text.
+    const near = (blocks[key(n.text.characters)] ?? []).filter((c) => !used.has(c) && dist(c) <= TEXT_PAIR_MAX_PX).sort((p, q) => dist(p) - dist(q))[0];
+    if (!near) continue;
+    used.add(near);
+    out.push({ n, b, near });
+  }
+  return out;
+}
+
+// Font, size, weight, italic, colour and letter-spacing of every text found on the page, tagged or not (tagged ones are already checked).
+const LETTER_SLACK_PX = 0.2;
+export function textStyleChecks(screen: ScreenFile, blocks: Record<string, TextBlock[]>, origin: { x: number; y: number }, skip: Set<string>): StyleMismatch[] {
+  const out: StyleMismatch[] = [];
+  for (const { n, near } of pairTexts(screen, blocks, origin)) {
+    const a = near.style;
+    if (!a || skip.has(n.id) || !n.text?.runs.length) continue;
+    const name = n.text.characters.replace(/\n/g, ' / ').slice(0, 40);
+    const add = (property: string, expected: string, actual: string) => out.push({ id: n.id, name, property, expected, actual });
+    const run = [...n.text.runs].sort((x, y) => (y.end - y.start) - (x.end - x.start))[0]!;
+    if (!familyKey(a.fontFamily.split(',')[0]!).includes(familyKey(run.fontFamily))) add('font-family', run.fontFamily, a.fontFamily.split(',')[0]!.trim());
+    if (run.fontWeight && run.fontWeight !== a.fontWeight) add('font-weight', String(run.fontWeight), String(a.fontWeight));
+    if (Math.abs(run.fontSize - a.fontSize) > SIZE_SLACK_PX) add('font-size', `${run.fontSize}px`, `${a.fontSize}px`);
+    const italic = /italic|oblique/i.test(run.fontStyle);
+    if (italic !== (a.fontStyle !== 'normal')) add('font-style', italic ? 'italic' : 'normal', a.fontStyle);
+    const want = solid(run.fills), got = hex(a.color);
+    if (want && got && !sameColor(want, got.hex)) add('color', want, got.hex);
+    const ls = run.letterSpacing?.unit === 'percent' ? (run.letterSpacing.value / 100) * run.fontSize : run.letterSpacing?.value ?? 0;
+    if (Math.abs(ls - a.letterSpacing) > LETTER_SLACK_PX) add('letter-spacing', `${round(ls)}px`, `${round(a.letterSpacing)}px`);
+    // Words are matched ignoring case, so the case shown is compared here: Figma's text case against the app text with its text-transform.
+    if (a.textTransform !== undefined) {
+      const cased = (s: string, c?: string) => (c === 'UPPER' || c === 'uppercase' ? s.toUpperCase() : c === 'LOWER' || c === 'lowercase' ? s.toLowerCase() : c === 'TITLE' || c === 'capitalize' ? s.replace(/(^|\s)(\S)/g, (_, w, ch) => w + ch.toUpperCase()) : s).replace(/\s+/g, '');
+      const want = cased(n.text.characters, run.textCase), got = cased(near.lines.join(' '), a.textTransform);
+      if (want !== got) add('text case', run.textCase ? `${run.textCase.toLowerCase()} ("${n.text.characters.slice(0, 20)}")` : `as written ("${n.text.characters.slice(0, 20)}")`, `"${near.lines.join(' ').slice(0, 20)}" with text-transform: ${a.textTransform}`);
+      const deco = run.textDecoration === 'UNDERLINE' ? 'underline' : run.textDecoration === 'STRIKETHROUGH' ? 'line-through' : 'none';
+      if (a.textDecoration !== undefined && !a.textDecoration.includes(deco === 'none' ? 'none' : deco)) add('text-decoration', deco, a.textDecoration);
+    }
+  }
+  return out;
+}
+
+// Untagged images and icons found by their asset file: each design layer takes the nearest unused app box, so compare() measures it like a tagged layer.
+const ASSET_PAIR_MAX_PX = 300;
+export function assetBoxes(screen: ScreenFile, found: Record<string, Box[]>, origin: { x: number; y: number }, tagged: Set<string>): Record<string, Box> {
+  const out: Record<string, Box> = {};
+  const used = new Set<Box>();
+  for (const f of flatten(screen.root)) {
+    const n = f.node, b = n.calculated?.screenBox;
+    if (!b || tagged.has(n.id) || f.depth === 0) continue;
+    const fills = Array.isArray(n.style?.fills) ? n.style!.fills : [];
+    const ids = [...(n.asset?.assetIds ?? []), ...fills.map((p) => (p.type === 'image' ? p.assetId : null)).filter((x): x is string => !!x)];
+    const dist = (c: Box) => Math.hypot(c.x - origin.x - b.x, c.y - origin.y - b.y);
+    for (const id of ids) {
+      const near = (found[id] ?? []).filter((c) => !used.has(c) && dist(c) <= ASSET_PAIR_MAX_PX).sort((p, q) => dist(p) - dist(q))[0];
+      if (near) { used.add(near); out[n.id] = near; break; }
+    }
+  }
+  return out;
+}
+
+// Rendered line breaks vs Figma's: a text whose words wrap elsewhere looks different even when its box size matches.
+// Sideways drift beyond font-width noise (TEXT_DRIFT_PX) means the text is placed or aligned differently.
+const TEXT_SHIFT_PX = 4;
+export function textLineChecks(screen: ScreenFile, blocks: Record<string, TextBlock[]>, origin: { x: number; y: number }): LineMismatch[] {
+  const key = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+  const out: LineMismatch[] = [];
+  for (const { n, b, near } of pairTexts(screen, blocks, origin)) {
+    if (!n.text) continue;
+    const app = near.lines;
+    const run = n.text.runs[0];
+    const size = run?.fontSize ?? 16, l = run?.lineHeight;
+    const lh = l?.unit === 'px' && l.value ? l.value : l?.unit === 'percent' && l.value ? (size * l.value) / 100 : size * 1.2;
+    const count = Math.max(1, Math.round(n.geometry.height / lh));
+    const figma = n.text.characters.split('\n');
+    // Explicit breaks that account for every line give the exact lines; otherwise only the line count is known.
+    const exact = figma.length === count && figma.every((l) => l.trim());
+    if (exact ? figma.map(key).join('|') !== app.map(key).join('|') : app.length !== count) {
+      // Narrower than Figma's box is the usual cause; otherwise the Figma breaks are explicit and must be kept.
+      const w = near.width, fw = round(n.geometry.width);
+      const hint = w !== undefined && w < fw - 1 ? `your text box is ${round(fw - w)}px narrower than Figma's (${w}px vs ${fw}px): give it Figma's width, or keep Figma's line breaks with <br> from the design width up`
+        : w !== undefined && w > fw + 1 && exact ? `your text box is ${round(w - fw)}px wider than Figma's (${w}px vs ${fw}px): keep Figma's line breaks with <br> from the design width up, or give it Figma's width`
+        : `keep Figma's line breaks with <br> from the design width up; if they still differ, check font size, weight and letter-spacing`;
+      out.push({ id: n.id, name: n.name, text: n.text.characters.replace(/\n/g, ' / ').slice(0, 60), kind: 'lines', figma: exact ? figma : [`${count} line(s)`], app, hint, box: b });
+    }
+    // Where the text sits sideways, measured on the edge its alignment pins (glyph widths may move the other edge): catches wrong text-align or justify on untagged text too.
+    const align = ({ CENTER: 'center', RIGHT: 'right' } as Record<string, string>)[n.text.alignHorizontal ?? ''] ?? 'left';
+    if (near.left !== undefined && near.right !== undefined) {
+      const l = near.left - origin.x, r = near.right - origin.x;
+      const off = align === 'right' ? r - (b.x + b.width) : align === 'center' ? (l + r) / 2 - (b.x + b.width / 2) : l - b.x;
+      if (Math.abs(off) > TEXT_SHIFT_PX)
+        out.push({ id: n.id, name: n.name, text: n.text.characters.replace(/\n/g, ' / ').slice(0, 60), kind: 'align', dx: round(off), figma: [`${align} edge at x ${round(align === 'right' ? b.x + b.width : align === 'center' ? b.x + b.width / 2 : b.x)}`], app: [`at x ${round(align === 'right' ? r : align === 'center' ? (l + r) / 2 : l)}`], box: b,
+          // Moved further than its own width: it is on another line of the sentence, so the wrap differs, not the alignment.
+          hint: Math.abs(off) > b.width
+            ? `it is on a different line than in Figma (the sentence wraps at another word): give the text box Figma's width or keep Figma's line break before it`
+            : `text sits ${round(Math.abs(off))}px too far ${off > 0 ? 'right' : 'left'}; Figma pins its ${align} edge there, so check text-align: ${align} and the container's alignment/padding` });
+    }
+  }
+  return out;
+}
+
+// Small differences under the failing tolerances, measured exactly so they are told apart from rendering noise:
+// a hugging text drawn wider or narrower than Figma with the same style (glyph widths of another font version), and a text a little off its place.
+// Chrome rounds each line box to whole pixels, so up to TEXT_NUDGE_PX is rendering, not code.
+const TEXT_NUDGE_PX = 1.5;
+const GLYPH_WIDTH_PX = 1;
+export interface TextNudge { id: string; text: string; box: Box; dx: number; dy: number; dw: number; cause?: { id: string; text: string; dw: number } }
+export function textNudges(screen: ScreenFile, blocks: Record<string, TextBlock[]>, origin: { x: number; y: number }): TextNudge[] {
+  const parentOf = new Map(flatten(screen.root).map((f) => [f.node.id, f.parent?.id]));
+  const all = pairTexts(screen, blocks, origin).filter(({ near }) => near.left !== undefined && near.right !== undefined && near.top !== undefined).map(({ n, b, near }) => {
+    const align = n.text?.alignHorizontal ?? 'LEFT', l = near.left! - origin.x, r = near.right! - origin.x;
+    const dx = align === 'RIGHT' ? r - (b.x + b.width) : align === 'CENTER' ? (l + r) / 2 - (b.x + b.width / 2) : l - b.x;
+    // Spaces at the ends count in Figma's width but carry no ink in the app, so such texts are not compared.
+    const c = n.text!.characters, hugs = /WIDTH/.test(n.text?.autoResize ?? '') && !c.includes('\n') && c === c.trim();
+    const dw = hugs ? round(r - l - b.width) : 0;
+    return { id: n.id, text: c.replace(/\n/g, ' / ').slice(0, 60), box: b, dx: round(dx), dy: round(near.top! - origin.y - b.y), dw: Math.abs(dw) > GLYPH_WIDTH_PX ? dw : 0 };
+  });
+  const wide = all.filter((t) => t.dw);
+  // Moved by as much as a sibling (or a sibling of its parent) is drawn wider or narrower: that text is the cause.
+  const near = (a: string, b: string) => parentOf.get(a) === parentOf.get(b) || parentOf.get(parentOf.get(a)!) === parentOf.get(parentOf.get(b)!);
+  // Larger moves fail through the layout and text-position checks; here only what stays under them.
+  return all.filter((t) => Math.max(Math.abs(t.dx), Math.abs(t.dy)) <= TEXT_SHIFT_PX && (t.dw || Math.max(Math.abs(t.dx), Math.abs(t.dy)) > TEXT_NUDGE_PX)).map((t) => {
+    const c = Math.abs(t.dx) > TEXT_NUDGE_PX ? wide.find((w) => w.id !== t.id && near(w.id, t.id) && Math.abs(Math.abs(w.dw) - Math.abs(t.dx)) <= 0.5) : undefined;
+    return c ? { ...t, cause: { id: c.id, text: c.text, dw: c.dw } } : t;
+  });
+}
+
+// Texts shifted sideways by the same amount share one cause (a padding or gap), so they are reported as one group.
+export function shiftGroups(lines: LineMismatch[]): { dx: number; items: LineMismatch[] }[] {
+  const groups: { dx: number; items: LineMismatch[] }[] = [];
+  for (const l of lines.filter((x) => x.kind === 'align')) {
+    const g = groups.find((x) => Math.abs(x.dx - l.dx!) <= 1);
+    if (g) g.items.push(l); else groups.push({ dx: l.dx!, items: [l] });
+  }
+  return groups.sort((a, b) => b.items.length - a.items.length || Math.abs(b.dx) - Math.abs(a.dx));
+}
+
 export function reportMarkdown(r: VerifyReport): string {
   const s = r.summary;
   const md = [
@@ -203,7 +387,15 @@ export function reportMarkdown(r: VerifyReport): string {
     `**${s.verdict.toUpperCase()}**: ${s.passed}/${s.measured} measured layers within ±${r.tolerancePx}px, ${s.failed} off, ${s.styleFailed} style differences (of ${s.styleChecked} checked), ${s.textMetrics} font-metric warnings, ${s.overflow} text overflow, ${s.missingKey} required layers not tagged (coverage ${Math.round(s.coverage * 100)}% of ${s.designNodes} design layers). Source: ${r.source}. Viewport ${r.viewport.actual.width}x${r.viewport.actual.height} (design ${r.viewport.expected.width}x${r.viewport.expected.height})${r.viewport.ok ? '' : ' **MISMATCH**'}.`,
     '',
   ];
-  if (r.visual) md.push(`Visual (supplementary, font rendering differs across engines): ${Math.round(r.visual.mismatchRatio * 1000) / 10}% of pixels differ${r.visual.diffImage ? `, diff image: ${r.visual.diffImage}` : ''}. ${r.visual.note}`, '');
+  if (r.visual) md.push(`Visual: ${Math.round(r.visual.mismatchRatio * 1000) / 10}% of pixels really differ${r.visual.noiseRatio ? ` (+${Math.round(r.visual.noiseRatio * 1000) / 10}% rendering only)` : ''}${r.visual.diffImage ? `, heatmap: ${r.visual.diffImage}` : ''}. ${r.visual.note}`, '');
+  const row = (f: Finding) => `${f.n}. **${f.kind}** ${f.id} "${f.name}": ${f.what}. Fix: ${f.fix}. Picture: verification/${f.crop}`;
+  const toFix = r.findings?.filter((f) => f.severity === 'fix') ?? [], toCheck = r.findings?.filter((f) => f.severity === 'check') ?? [];
+  if (toFix.length) md.push('## Fix these first (look at each picture)', '', 'Each picture: left = Figma (green outline), right = your app (red outline). One row can stand for several layers with one shared cause.', '', ...toFix.map(row), '');
+  if (toCheck.length) md.push('## Small differences (page passes; fix these for pixel-perfect)', '', 'Measured differences under the failing tolerance, each with its exact px and cause. Glyph-edge smoothing of a text that is in place is not listed.', '', ...toCheck.map(row), '');
+  const wraps = r.lines?.filter((l) => l.kind !== 'align') ?? [];
+  if (wraps.length) md.push('## Text lines differ (fix these)', '', 'The words wrap at other places than in Figma.', '', ...wraps.map((l) => `- ${l.id}: Figma "${l.figma.join(' / ')}" → app "${l.app.join(' / ')}". Fix: ${l.hint ?? 'keep the Figma line breaks'}`), '');
+  const shifts = shiftGroups(r.lines ?? []);
+  if (shifts.length) md.push('## Text placed sideways (fix these)', '', 'Measured on the edge each text is aligned to, tagged or not. Texts moved by the same amount share one cause: fix the padding, gap or alignment of their common container once.', '', ...shifts.map((g) => `- ${g.items.length} text(s) ${Math.abs(g.dx)}px too far ${g.dx > 0 ? 'right' : 'left'}: ${g.items.slice(0, 8).map((x) => `${x.id} "${x.text ?? x.name}"`).join(', ')}${g.items.length > 8 ? ` and ${g.items.length - 8} more` : ''}.${g.items.length === 1 ? ` Fix: ${g.items[0]!.hint}` : ''}`), '');
   if (r.mismatches.length) {
     md.push('## Fix these (largest first)', '', 'Δ is this layer\'s own error: a shift its parent or the layer before it already explains is not counted again, so fix the listed layer itself.', '', '| Layer | id | Expected x,y wxh | Actual x,y wxh | Δx Δy Δw Δh |', '|---|---|---|---|---|');
     for (const x of r.mismatches.slice(0, 50))
@@ -212,11 +404,44 @@ export function reportMarkdown(r: VerifyReport): string {
     md.push('');
   }
   if (r.styles.length) md.push('## Style differences (fix these)', '', 'Exact computed CSS vs the Figma values, so font rendering does not matter here.', '', '| Layer | id | Property | Figma | App |', '|---|---|---|---|---|', ...r.styles.slice(0, 50).map((x) => `| ${x.name} | ${x.id} | ${x.property} | ${x.expected} | ${x.actual} |`), r.styles.length > 50 ? `| … ${r.styles.length - 50} more in the JSON report | | | | |` : '', '');
-  if (r.textMetrics.length) md.push('## Font-metric differences (warning, do not fix in layout)', '', `Text renders slightly narrower or wider than in Figma (font build/engine), which also shifts its row neighbours sideways by up to ${TEXT_DRIFT_PX}px. Vertical position and height match. Check the font version; do not add padding or offsets for these.`, '', ...r.textMetrics.map((x) => `- ${x.name} (${x.id}): Δx ${x.delta.x} Δw ${x.delta.width}`), '');
   if (r.narrow) md.push(`## Small screen (${r.narrow.width}px wide)`, '', r.narrow.ok ? 'OK: no horizontal scroll, no content cut off.' : `**FAIL**: page is ${r.narrow.scrollWidth}px wide (scrolls sideways) or content is cut off. Make the layout fluid (see "Production code rules" in the brief). Cut off (figma id, text):`, ...r.narrow.cutOff.map((c) => `- ${c}`), '');
   if (r.code?.length) md.push('## Code rules (fix these)', '', 'Production code rules checked in the source.', '', ...r.code.map((c) => `- ${c.file}:${c.line} — ${c.rule}: ${c.text}`), '');
   if (r.overflow.length) md.push('## Text overflow', '', ...r.overflow.map((o) => `- ${o.name} (${o.id})${o.text ? `: "${o.text}"` : ''}`), '');
   if (r.missingKeyNodes.length) md.push(`## Not tagged (tag these to verify them)`, '', ...r.missingKeyNodes.slice(0, 40).map((n) => `- ${n.name} (${n.id})`), r.missingKeyNodes.length > 40 ? `- … ${r.missingKeyNodes.length - 40} more` : '', '');
   if (r.unknownIds.length) md.push(`Tagged ids not in this screen (typo or other screen): ${r.unknownIds.slice(0, 20).join(', ')}`, '');
   return md.join('\n') + '\n';
+}
+
+declare const F2F_VERSION: string;
+// A ready prompt for any coding agent with every measured difference of this screen, so the developer copies it as is.
+export function fixPrompt(r: VerifyReport, slug: string): string | null {
+  const url = r.source.replace(/^chrome /, '');
+  const items: string[] = [];
+  for (const f of r.findings ?? []) items.push(`${f.kind}, ${f.id} "${f.name}": ${f.what}. Fix: ${f.fix}. Picture: f2f/verification/${f.crop}`);
+  const listed = new Set((r.findings ?? []).flatMap((f) => [f.id, ...(f.what.match(/\d+:\d+/g) ?? [])]));
+  for (const x of r.mismatches.filter((x) => !listed.has(x.id)).slice(0, 30)) items.push(`layout, ${x.id} "${x.name}": Figma ${x.expected.x},${x.expected.y} ${x.expected.width}x${x.expected.height}, app ${x.actual.x},${x.actual.y} ${x.actual.width}x${x.actual.height}. Fix: give it the Figma size and position from its outline line`);
+  for (const x of r.styles.filter((x) => !listed.has(x.id)).slice(0, 30)) items.push(`style, ${x.id} "${x.name}": ${x.property} is ${x.actual}, Figma ${x.expected}. Fix: set ${x.property} to the Figma value`);
+  for (const l of (r.lines ?? []).filter((l) => l.kind !== 'align' && !listed.has(l.id))) items.push(`text lines, ${l.id}: Figma "${l.figma.join(' / ')}", app "${l.app.join(' / ')}". Fix: ${l.hint ?? "keep Figma's line breaks"}`);
+  if (!r.viewport.ok) items.push(`page size: app ${r.viewport.actual.width}x${r.viewport.actual.height}, Figma ${r.viewport.expected.width}x${r.viewport.expected.height}. Fix: the section heights above add up wrong; fix the layout findings first`);
+  if (r.narrow && !r.narrow.ok) items.push(`small screen ${r.narrow.width}px: page is ${r.narrow.scrollWidth}px wide or cuts off ${r.narrow.cutOff.join('; ')}. Fix: make the layout fluid`);
+  for (const c of r.code ?? []) items.push(`code rule, ${c.file}:${c.line}: ${c.rule}`);
+  for (const o of r.overflow) items.push(`text overflow, ${o.id} "${o.name}". Fix: the text must fit its box as in Figma`);
+  for (const n of r.missingKeyNodes.slice(0, 20)) items.push(`not tagged, ${n.id} "${n.name}". Fix: add data-figma-id="${n.id}" to the element that draws it`);
+  if (!items.length) return null;
+  return [
+    `Make the screen "${r.screen.name}" (Figma ${r.screen.id}, ${url}) match Figma pixel for pixel. Follow f2f-project.md and the F2F files; never invent a value.`,
+    `The F2F verify tool measured the ${items.length} differences below in the running app. For each one, open its picture first (left = Figma with a green outline, right = your app with a red outline), then read the outline line of every id named in f2f/screens/${slug}.md for the exact values (size, padding, gap, font, colour) and fix the code.`,
+    '',
+    ...items.map((x, i) => `${i + 1}. ${x}`),
+    '',
+    'Rules:',
+    // An older f2f-cli does not measure these checks, so its run would report none of them and the agent would stop.
+    ...(typeof F2F_VERSION === 'string' ? [`- First run \`npx f2f --version\`: it must be ${F2F_VERSION} or newer, the version that measured this list. If it is older, update f2f-cli to the latest version first (with the project's package manager), because older versions do not measure these items.`] : []),
+    '- When one row names several ids, they share one cause: fix it once in the shared component, class or token.',
+    '- When a row says another text is the cause, fix only that cause, not the position of this one.',
+    '- "text width" means the font file draws those characters at another width than the font in Figma: load the same font version the design uses; never add padding or letter-spacing for it.',
+    '- Do not change anything that is not listed. Never use --window or --tolerance.',
+    `- Run \`${/^https?:/.test(url) ? `f2f verify --screen ${r.screen.id} --url ${url}` : 'f2f verify'}\` after your changes and repeat until it shows PASS and no "Small differences"; start the app first if it is not running, and stop any dev server you started.`,
+    `- Report what you changed for each number above, and anything you could not fix with the reason.`,
+  ].join('\n') + '\n';
 }

@@ -24,6 +24,7 @@ export const TRANSLATION_RULES = [
   '| letter spacing `ls P%` | `letterSpacing: P / 100 * fontSize` | `letter-spacing: P/100 em` |',
   '| text `\\n` | keep the line break; do not let the box re-wrap | `white-space: pre-line` |',
   '| image `fill` / `fit` | `BoxFit.cover` / `BoxFit.contain` with `filterQuality: FilterQuality.high` | `object-fit: cover` / `contain` |',
+  '| image `crop → object-fit: cover; object-position: X% Y%` | `BoxFit.cover` with `alignment: Alignment(X/50-1, Y/50-1)` | exactly that CSS (a centred cover shows a different part of the image) |',
   '| SVG asset `WxH` | wrap in `SizedBox(W, H)` so the layout box is the design size | `width/height` on the `<img>`/`<svg>` |',
   '| layer `HIDDEN` / paint `(hidden)` | do not render | do not render |',
   '| `(children = component definition)` | use the code component mapped in the brief, unchanged | same |',
@@ -85,6 +86,6 @@ export const VERIFY_LOOP = [
   '1. Tag the layers you build with their Figma ids (at least every layer down to depth 2; more is better).',
   '2. Run the app at the design viewport and run `f2f verify` for the screen.',
   '3. Fix every row of `verification/<screen>.md` "Fix these" (largest first), then re-run. Look at `<screen>.diff.png`: red areas the measurements did not explain are usually missing assets, wrong images or colours.',
-  '4. Stop when the verdict is PASS, or explain each remaining item (e.g. font-metric text-width warnings) to the user.',
+  '4. Follow f2f/verification/<screen>.prompt.md when verify writes one: it lists every measured difference with its picture. Stop when the verdict is PASS with no small differences, or explain each remaining item (e.g. a "text width" row that needs the design\'s font version) to the user.',
   '',
 ].join('\n');

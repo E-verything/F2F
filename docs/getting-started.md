@@ -276,8 +276,11 @@ Next step: every screen PASS → "Build the next page: `f2f build --feature "<ne
 ```
 Follow f2f-project.md and the F2F files exactly. Never invent a value; if something is unclear, stop and ask me.
 
-Find every report in f2f/verification/*.md whose verdict is **FAIL**, and fix those screens one by one (read the .md report; also look at the .diff.png next to it if there is one). If none says FAIL, say so and stop.
-Fix the listed differences, largest first. Fix the cause in the shared widget or the token when the same difference appears on several elements; do not patch each screen separately.
+Find every report in f2f/verification/*.md whose verdict is **FAIL** or that has a "Small differences" section, and fix those screens one by one; each such screen has f2f/verification/<screen>.prompt.md listing every difference with its picture, so follow it. If none, say so and stop.
+In each report, work through "Fix these first" in order: open the picture each row names (left = Figma, right = your app) and compare it with the row's text before changing code; then fix the other listed sections. Read the screen outline line of each id for the exact values.
+Then, for pixel-perfect, fix the "Small differences" rows that carry a measured cause: "small shift" → move the text by the px the row gives, by fixing the margin, padding, gap or line-height before it (or, when the row names another text as the cause, fix only that cause); "text width" → the app's font file draws those characters at another width than Figma's: load the same font version the design uses and change nothing else for it (no padding, no letter-spacing). Leave a "pixels" row alone unless its picture shows a real difference.
+Fix the cause in the shared widget or the token when the same difference appears on several elements; do not patch each screen separately.
+Verify with `f2f verify --all` (or `f2f verify --screens …`), never with --window, --tolerance or other flags that hide a difference; a check that fails must be fixed in the code, not in the command.
 A value read from the screen outline is a design fact, not a value you chose. If instances of the same element differ in the design (sizes, offsets, gaps), give each instance its own measured values through a prop or a per-instance class; do not ask me which one is right. List those differences as a note for the designer.
 Do not change any value that is not listed. Re-run verify for each fixed screen until it passes, then stop every dev server you started and summarise what you actually changed and why, with the line "Dev servers: none running" and the line "See every difference with images: run `f2f report --open`".
 Before starting a dev server, check whether one is already running for this app and reuse it. Before you report, stop every dev server you started (including background ones) and delete log files you created.
@@ -373,14 +376,22 @@ The `<id>` values are the `#…` ids in `f2f/screens/<screen>.md`. The brief alr
 - **PASS or FAIL** at the top.
 - **Geometry:** every layer that is off by more than ±1 px, with Δx Δy Δw Δh, largest first. Example: `#12:40 Title  Δy +8  Δh -2` means the title sits 8 px too low and is 2 px too short. Each layer is measured against its parent and the layer before it, so a section that is 20 px too tall is reported once, on that section, not on every layer below it.
 - **Style (web):** the exact computed font family, weight, italic, size and text colour of each tagged text, and the background colour and corner radius of each tagged box, against the Figma values. It also lists fonts anywhere on the page whose file is not loaded, so the browser fakes them (for example a slanted "italic"). These are numbers, so font rendering does not affect them.
+- **Untagged texts, images and icons (web):** every text in the design is found on the page by its words, and its font, size, weight, italic, colour and letter-spacing are checked too. Images and icons are found by their asset file name (bundlers keep it in the URL) and measured like tagged layers. Tags are still needed for containers and sections. The same wrong value on many texts (for example letter-spacing 0 instead of 0.24 px on 21 labels) is reported once, as one class or token to fix.
+- **Untagged layout of texts (web):** every text is also measured from its rendered line boxes, so a label 19 px lower than in Figma fails even without a tag; a text that Figma splits into two layers but the app draws as one sentence is found inside that sentence.
+- **Colour presence (web):** where Figma draws a text, bullet, dot, line or icon in a colour, that colour must be at that place in the app. A square bullet replaced by a dash, a missing name or a dot that moved 16 px is reported with what Figma draws there (shape, size, colour, radius) and, when it is found close by, how far it moved.
 - **Code rules:** your source is scanned for Figma ids built with string maths (write them as literals) and for raw two-decimal box sizes or spacing copied from Figma (round them). Typography values such as letter-spacing keep their exact design values.
 - **Small screen (web):** the page is loaded again at 375 px wide; it fails if it scrolls sideways or cuts off text or images.
 - **Overflow:** text that is clipped.
 - **Coverage:** Figma layers that have no tag in your code, so they cannot be measured.
-- **Font-metric warnings:** Figma and browsers draw letters slightly differently, so text can be about 2 px narrower or wider and nudge its row neighbours sideways. These are warnings, not failures; do not add padding to "fix" them.
-- **Web only:** an app screenshot and a **diff image** (the heatmap in the report page). Red pixels are real differences from the Figma screenshot (edge-only anti-aliasing differences are ignored). It is a hint for images and icons, not a pass/fail.
+- **Text lines (web, fails):** every text in the design is found on the page by its words, tagged or not, and its rendered lines are compared with Figma's. "Complete Residential AC / Installation" in Figma but "Complete Residential / AC Installation" in the app is a failure, because it looks different even when the box size matches.
+- **Text position (web, fails):** every text, tagged or not, is measured on the edge it is aligned to in Figma (left, centre or right). A right-aligned label drawn on the left, or a list that sits 6 px too far left, fails. Texts moved by the same amount are reported once, as one shared cause.
+- **Web only, heatmap:** an app screenshot and a **diff image** (the heatmap in the report page). **Green** = a shape as Figma draws it, **red** = the same spot in your app (moved, missing or different), **grey** = same, or different only in rendering (photo re-compression, font smoothing; not counted). A green word next to a red one means it moved; green with no red means it is missing in the app. Numbered purple boxes match the "Fix these first" list.
+- **Fix these first:** up to 14 findings per screen, each with what is wrong, how to fix it, and a small picture: Figma on the left (green outline), your app on the right (red outline). For images and icons the tool also measures whether the content is moved or zoomed; untagged texts, images and icons whose pixels really differ are found here too. Agents that read images use these pictures; the report page shows them as cards. Only numbered findings are marked on the heatmap; a difference without a finding is rendering only.
+- **Small differences (page passes):** what stays under the failing tolerance, measured exactly. **Small shift**: a text 1.5–4 px off its place, with its cause when another text pushed it. **Text width**: a text drawn wider or narrower than in Figma with the same font, size, weight and spacing, which means another version of the font file. A text whose position, width and style all match is not listed even if its pixels differ, because Figma and the browser smooth glyph edges differently. For pixel-perfect, fix these too; then the section is empty.
+- **Text case and underline (web, fails):** the case the text is shown in (Figma's text case against the app text with its text-transform) and underline or strike-through are compared on every text.
+- **Fix prompt per screen:** every screen with anything to fix gets `f2f/verification/<screen>.prompt.md`, also shown in the report page with a "Copy prompt" button. It lists every measured difference with its px, fix and picture, the rules, and the command that re-verifies only that screen. Paste it as is into Claude, Codex or any coding agent. A clean screen has no prompt.
 
-You fix it, or give the report to the agent with prompt 3, and run `verify` again until it shows PASS.
+You fix it, paste the screen's fix prompt into your agent, or use prompt 3 for all screens at once, and run `verify` again until it shows PASS and no small differences.
 
 On mobile (Android, iOS), styles are not measured as numbers yet: check colours and fonts by eye (see roadmap item 4).
 
@@ -406,7 +417,7 @@ On mobile (Android, iOS), styles are not measured as numbers yet: check colours 
 | Plugin not in Figma | Open [F2F on Figma Community](https://www.figma.com/community/plugin/1691251414681348956) and run it once from there |
 | `No feature or screen "x"` | Use a name from the error message's `Features:` list |
 | Many "untagged" layers | Add the tag from the brief to each element; untagged elements cannot be measured |
-| Text boxes off by 1 to 3 px only | Font-metric warning. Bundle the same font the design uses |
+| "text width" in Small differences | The app's font file is another version than the one in Figma. Load the same font version the design uses; do not add padding |
 
 ## Developing the tool itself
 

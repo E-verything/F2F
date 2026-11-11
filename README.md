@@ -48,7 +48,8 @@ The report in `f2f/verification/<screen>.md` gives PASS/FAIL with:
 - **Style (web):** computed font family, weight, italic, size, text colour, background and corner radius against the Figma values, plus fonts the browser fakes because their file is not loaded.
 - **Small screen (web):** no sideways scrolling or cut-off content at 375 px.
 - **Code rules:** no computed Figma ids, no raw two-decimal sizes or spacing copied from Figma.
-- **Overflow, coverage, font-metric warnings**, and on web a diff image as a visual hint.
+- **Overflow, coverage, small differences** (text 1.5–4 px off or drawn at another width), and on web a diff image as a visual hint.
+- **A fix prompt per screen** (`f2f/verification/<screen>.prompt.md`, with a copy button in the report) to paste into any coding agent.
 
 ## Other commands
 

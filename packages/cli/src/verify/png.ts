@@ -85,11 +85,39 @@ export function encodePng(img: Image): Buffer {
 // Both images are composited over white first: Figma exports leave uncovered areas transparent, while a browser or device paints them.
 const overWhite = (img: Image, i: number, c: number) => { const a = img.data[i + 3]! / 255; return img.data[i + c]! * a + 255 * (1 - a); };
 
-// Compares the overlapping area; the diff image shows the app dimmed with differing pixels in red.
-export function diffImages(design: Image, app: Image): { ratio: number; diff: Image } {
+// Neighbourhood averages: photo re-compression and glyph smoothing change single pixels but not the average colour of a small area, while a moved, missing or recoloured shape does.
+const NOISE_RADIUS = 2;
+const NOISE_THRESHOLD = 12;
+// Wider area used as the local background when deciding which side has the shape (ink) at a differing pixel.
+const BG_RADIUS = 4;
+const GREY_ALPHA = 70;
+// Colours of the heatmap: green = shape in Figma, red = shape in the app.
+export const DIFF_COLORS = { design: [0, 170, 60, 255], app: [230, 0, 0, 255] } as const;
+
+const lum = (img: Image, i: number) => 0.299 * overWhite(img, i, 0) + 0.587 * overWhite(img, i, 1) + 0.114 * overWhite(img, i, 2);
+// Summed-area tables (one per channel) give any box mean in four reads, so a fully different page costs the same as a matching one.
+function boxMeans(img: Image, w: number, h: number) {
+  const W = w + 1;
+  const sat = [0, 1, 2].map(() => new Uint32Array(W * (h + 1)));
+  for (let y = 0; y < h; y++)
+    for (let c = 0; c < 3; c++) {
+      const s = sat[c]!;
+      let row = 0;
+      for (let x = 0; x < w; x++) { row += Math.round(overWhite(img, (y * img.width + x) * 4, c)); s[(y + 1) * W + x + 1] = s[y * W + x + 1]! + row; }
+    }
+  return (x: number, y: number, r: number): [number, number, number] => {
+    const x0 = Math.max(0, x - r), y0 = Math.max(0, y - r), x1 = Math.min(w, x + r + 1), y1 = Math.min(h, y + r + 1), n = (x1 - x0) * (y1 - y0);
+    return [0, 1, 2].map((c) => { const s = sat[c]!; return (s[y1 * W + x1]! - s[y0 * W + x1]! - s[y1 * W + x0]! + s[y0 * W + x0]!) / n; }) as [number, number, number];
+  };
+}
+
+// Compares the overlapping area. `mask` marks real differences (1) per pixel, for per-layer counts; `noise` is the share that differs only in rendering.
+export function diffImages(design: Image, app: Image): { ratio: number; noise: number; diff: Image; mask: Uint8Array } {
   const width = Math.min(design.width, app.width), height = Math.min(design.height, app.height);
   const diff = { width, height, data: new Uint8Array(width * height * 4) };
-  let bad = 0;
+  const mask = new Uint8Array(width * height);
+  let bad = 0, noisy = 0;
+  let meanD: ReturnType<typeof boxMeans> | null = null, meanA: ReturnType<typeof boxMeans> | null = null;
   const same = (a: Image, ai: number, b: Image, bi: number) => [0, 1, 2].every((c) => Math.abs(overWhite(a, ai, c) - overWhite(b, bi, c)) <= CHANNEL_THRESHOLD);
   // Font engines anti-alias glyph edges differently and place them up to a pixel apart; a pixel that matches its neighbour in the other image is not a real difference.
   const matchesNear = (a: Image, ai: number, b: Image, x: number, y: number) => {
@@ -104,8 +132,19 @@ export function diffImages(design: Image, app: Image): { ratio: number; diff: Im
     for (let x = 0; x < width; x++) {
       const i = (y * design.width + x) * 4, j = (y * app.width + x) * 4, o = (y * width + x) * 4;
       const differs = !same(design, i, app, j) && !(matchesNear(design, i, app, x, y) && matchesNear(app, j, design, x, y));
-      if (differs) { bad++; diff.data.set([255, 0, 0, 255], o); }
-      else { const g = (overWhite(app, j, 0) + overWhite(app, j, 1) + overWhite(app, j, 2)) / 3; diff.data.set([g, g, g, 70], o); }
+      if (!differs) { const g = (overWhite(app, j, 0) + overWhite(app, j, 1) + overWhite(app, j, 2)) / 3; diff.data.set([g, g, g, GREY_ALPHA], o); continue; }
+      // Built on the first differing pixel only: matching screens never pay for the tables.
+      meanD ??= boxMeans(design, width, height); meanA ??= boxMeans(app, width, height);
+      const md = meanD(x, y, NOISE_RADIUS), ma = meanA(x, y, NOISE_RADIUS);
+      // Rendering-only differences are drawn like matching pixels, so the heatmap shows only what needs fixing.
+      if ([0, 1, 2].every((c) => Math.abs(md[c]! - ma[c]!) <= NOISE_THRESHOLD)) { noisy++; const g = (overWhite(app, j, 0) + overWhite(app, j, 1) + overWhite(app, j, 2)) / 3; diff.data.set([g, g, g, GREY_ALPHA], o); continue; }
+      bad++;
+      mask[y * width + x] = 1;
+      // The side whose pixel stands out more from its own surroundings is the one drawing a shape here.
+      const bd = meanD(x, y, BG_RADIUS), ba = meanA(x, y, BG_RADIUS);
+      const inkD = Math.abs(lum(design, i) - (0.299 * bd[0] + 0.587 * bd[1] + 0.114 * bd[2]));
+      const inkA = Math.abs(lum(app, j) - (0.299 * ba[0] + 0.587 * ba[1] + 0.114 * ba[2]));
+      diff.data.set(inkD > inkA ? DIFF_COLORS.design : DIFF_COLORS.app, o);
     }
-  return { ratio: bad / (width * height), diff };
+  return { ratio: bad / (width * height), noise: noisy / (width * height), diff, mask };
 }

@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Measurements } from './compare';
+import { measureTexts } from './page-text';
 
 // Drives the user's installed Chrome/Edge over the DevTools protocol (Node's built-in WebSocket), so verification needs no browser-automation library or browser download.
 
@@ -53,6 +54,7 @@ const COLLECT = `(() => {
     }
     out[id] = m;
   }
+  // Page height is where its content ends, not the window (which is taller than the design on purpose).
   // Faked fonts anywhere on the page, tagged or not: every element that draws its own text.
   const faked = new Map();
   for (const el of document.querySelectorAll('body *')) {
@@ -62,7 +64,7 @@ const COLLECT = `(() => {
     const key = s.fontStyle + ' ' + s.fontWeight + ' ' + fam;
     if (!faked.has(key) && !fontFaceLoaded(fam, s.fontStyle, Number(s.fontWeight))) faked.set(key, key + ': ' + el.textContent.trim().slice(0, 30));
   }
-  return JSON.stringify({ count: els.length, nodes: out, fakedFonts: [...faked.values()].slice(0, 10) });
+  return JSON.stringify({ count: els.length, nodes: out, fakedFonts: [...faked.values()].slice(0, 10), page: { width: document.documentElement.clientWidth, height: Math.round(Math.max(0, ...[...document.body.children].map((c) => c.getBoundingClientRect().bottom + scrollY))) } });
 })()`;
 
 class Cdp {
@@ -94,7 +96,28 @@ class Cdp {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export interface WebMeasureOptions { url: string; viewport: { width: number; height: number }; rootId: string; waitMs?: number; screenshot?: boolean; chromePath?: string; narrowWidth?: number }
+// Runs in the page with the design's asset ids: every visible <img>, <image> or background whose URL carries the asset file name (bundlers keep it), with its box.
+const ASSETS = (ids: string[]) => `(() => {
+  const want = ${JSON.stringify(ids)};
+  const res = {};
+  for (const el of document.querySelectorAll('body *')) {
+    const url = (el.currentSrc || el.getAttribute('src') || el.getAttribute('href') || '') + ' ' + getComputedStyle(el).backgroundImage;
+    const id = want.find((i) => url.includes(i));
+    if (!id) continue;
+    // The visible part: an image sized past its box and clipped by a wrapper (a crop) shows only the wrapper's area.
+    let { left, top, right, bottom } = el.getBoundingClientRect();
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+      if (getComputedStyle(p).overflow === 'visible') continue;
+      const c = p.getBoundingClientRect();
+      left = Math.max(left, c.left); top = Math.max(top, c.top); right = Math.min(right, c.right); bottom = Math.min(bottom, c.bottom);
+    }
+    if (right - left < 1 || bottom - top < 1) continue;
+    (res[id] ??= []).push({ x: left + scrollX, y: top + scrollY, width: right - left, height: bottom - top });
+  }
+  return JSON.stringify(res);
+})()`;
+
+export interface WebMeasureOptions { url: string; viewport: { width: number; height: number }; rootId: string; waitMs?: number; screenshot?: boolean; chromePath?: string; narrowWidth?: number; texts?: [string, string, string?][]; assets?: string[] }
 
 // Runs in the page at the narrow width: text and images past the right edge are cut off or scroll sideways; empty decorations are ignored.
 const NARROW = `(() => {
@@ -134,7 +157,7 @@ export async function measureWeb(o: WebMeasureOptions): Promise<{ measurements: 
     const loaded = cdp.once('Page.loadEventFired', READY_TIMEOUT_MS);
     await cdp.send('Page.navigate', { url: o.url }, sessionId);
     await loaded;
-    let result: { count: number; nodes: Measurements['nodes']; fakedFonts?: string[] } = { count: 0, nodes: {} };
+    let result: { count: number; nodes: Measurements['nodes']; fakedFonts?: string[]; page?: { width: number; height: number } } = { count: 0, nodes: {} };
     let last = -1;
     const deadline = Date.now() + READY_TIMEOUT_MS;
     // Flutter builds its semantics DOM asynchronously; wait until the tagged count stops changing.
@@ -149,6 +172,8 @@ export async function measureWeb(o: WebMeasureOptions): Promise<{ measurements: 
     const r = await cdp.send('Runtime.evaluate', { expression: `(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => ${COLLECT})`, awaitPromise: true, returnByValue: true }, sessionId);
     result = JSON.parse(r.result.value);
     const root = result.nodes[o.rootId];
+    const lines = o.texts?.length ? JSON.parse((await cdp.send('Runtime.evaluate', { expression: `(${measureTexts.toString()})(${JSON.stringify(o.texts)})`, returnByValue: true }, sessionId)).result.value) : undefined;
+    const assets = o.assets?.length ? JSON.parse((await cdp.send('Runtime.evaluate', { expression: ASSETS(o.assets), returnByValue: true }, sessionId)).result.value) : undefined;
     let screenshot: Buffer | null = null;
     if (o.screenshot) {
       const clip = root ? { x: root.x, y: root.y, width: root.width, height: root.height, scale: 1 } : { x: 0, y: 0, width: o.viewport.width, height: o.viewport.height, scale: 1 };
@@ -166,11 +191,13 @@ export async function measureWeb(o: WebMeasureOptions): Promise<{ measurements: 
     }
     await cdp.send('Browser.close').catch(() => undefined);
     ws.close();
-    const viewport = root ? { width: Math.round(root.width), height: Math.round(root.height) } : o.viewport;
-    return { measurements: { screenId: o.rootId, source: `chrome ${o.url}`, viewport, nodes: result.nodes, fakedFonts: result.fakedFonts ?? [], ...(narrow ? { narrow } : {}) }, screenshot };
+    // Without a tagged root the page itself is the screen; the window is larger than the design on purpose, so it is not the page size.
+    const viewport = root ? { width: Math.round(root.width), height: Math.round(root.height) } : result.page ?? o.viewport;
+    return { measurements: { screenId: o.rootId, source: `chrome ${o.url}`, viewport, nodes: result.nodes, fakedFonts: result.fakedFonts ?? [], ...(lines ? { lines } : {}), ...(assets ? { assets } : {}), ...(narrow ? { narrow } : {}) }, screenshot };
   } finally {
     proc.kill();
     await sleep(300);
-    rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    // Windows can keep a just-closed Chrome's profile locked; a leftover temp folder must not turn a finished verify into a crash.
+    try { rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch { /* left in the OS temp folder */ }
   }
 }
