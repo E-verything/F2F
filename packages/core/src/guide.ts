@@ -86,6 +86,6 @@ export const VERIFY_LOOP = [
   '1. Tag the layers you build with their Figma ids (at least every layer down to depth 2; more is better).',
   '2. Run the app at the design viewport and run `f2f verify` for the screen.',
   '3. Fix every row of `verification/<screen>.md` "Fix these" (largest first), then re-run. Look at `<screen>.diff.png`: red areas the measurements did not explain are usually missing assets, wrong images or colours.',
-  '4. Follow f2f/verification/<screen>.prompt.md when verify writes one: it lists every measured difference with its picture. Stop when the verdict is PASS with no small differences, or explain each remaining item (e.g. a "text width" row that needs the design\'s font version) to the user.',
+  '4. Follow f2f/verification/<screen>.prompt.md when verify writes one: it lists every measured difference with its picture. Stop when the verdict is PASS with no small differences, or explain each remaining item (e.g. a "text width" row whose font file you cannot change) to the user.',
   '',
 ].join('\n');

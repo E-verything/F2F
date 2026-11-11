@@ -32,6 +32,8 @@ export interface VerifyReport {
   visual?: { mismatchRatio: number; noiseRatio?: number; diffImage: string | null; note: string; hotspots?: Hotspot[] };
   lines?: LineMismatch[];
   findings?: Finding[];
+  // Measured differences no code or font change can remove (the two text engines), shown so nothing is hidden.
+  engineNote?: string;
 }
 
 // A text layer whose box hugs its content may differ by this share of its width from glyph-advance differences between font builds/engines.
@@ -344,11 +346,15 @@ export function textLineChecks(screen: ScreenFile, blocks: Record<string, TextBl
 }
 
 // Small differences under the failing tolerances, measured exactly so they are told apart from rendering noise:
-// a hugging text drawn wider or narrower than Figma with the same style (glyph widths of another font version), and a text a little off its place.
+// a hugging text drawn wider or narrower than Figma with the same style, and a text a little off its place.
 // Chrome rounds each line box to whole pixels, so up to TEXT_NUDGE_PX is rendering, not code.
 const TEXT_NUDGE_PX = 1.5;
 const GLYPH_WIDTH_PX = 1;
-export interface TextNudge { id: string; text: string; box: Box; dx: number; dy: number; dw: number; cause?: { id: string; text: string; dw: number } }
+// Figma lays some texts out 1-3px wider or narrower than the browser with the same font (measured 2026-11-11: a retyped Figma text keeps its width;
+// Inter 3.19/4.0/4.1, CSS font features, opsz 14-32, kerning and glyph rounding all fail to reproduce it). The cause is not confirmed, so it is a note, not a finding.
+const ENGINE_PX = 2.5; const ENGINE_SHARE = 0.0125;
+// dw: the text is wider (+) or narrower (-) than its Figma box. engine: within what the two text engines differ by.
+export interface TextNudge { id: string; text: string; box: Box; dx: number; dy: number; dw: number; engine?: boolean; cause?: { id: string; text: string; dw: number; engine?: boolean } }
 export function textNudges(screen: ScreenFile, blocks: Record<string, TextBlock[]>, origin: { x: number; y: number }): TextNudge[] {
   const parentOf = new Map(flatten(screen.root).map((f) => [f.node.id, f.parent?.id]));
   const all = pairTexts(screen, blocks, origin).filter(({ near }) => near.left !== undefined && near.right !== undefined && near.top !== undefined).map(({ n, b, near }) => {
@@ -357,15 +363,16 @@ export function textNudges(screen: ScreenFile, blocks: Record<string, TextBlock[
     // Spaces at the ends count in Figma's width but carry no ink in the app, so such texts are not compared.
     const c = n.text!.characters, hugs = /WIDTH/.test(n.text?.autoResize ?? '') && !c.includes('\n') && c === c.trim();
     const dw = hugs ? round(r - l - b.width) : 0;
-    return { id: n.id, text: c.replace(/\n/g, ' / ').slice(0, 60), box: b, dx: round(dx), dy: round(near.top! - origin.y - b.y), dw: Math.abs(dw) > GLYPH_WIDTH_PX ? dw : 0 };
+    return { id: n.id, text: c.replace(/\n/g, ' / ').slice(0, 60), box: b, dx: round(dx), dy: round(near.top! - origin.y - b.y), dw: Math.abs(dw) > GLYPH_WIDTH_PX ? dw : 0,
+      ...(Math.abs(dw) > GLYPH_WIDTH_PX && Math.abs(dw) <= Math.max(ENGINE_PX, b.width * ENGINE_SHARE) ? { engine: true } : {}) };
   });
   const wide = all.filter((t) => t.dw);
-  // Moved by as much as a sibling (or a sibling of its parent) is drawn wider or narrower: that text is the cause.
+  // Moved by as much as a sibling (or a sibling of its parent) is wider or narrower: that text is the cause.
   const near = (a: string, b: string) => parentOf.get(a) === parentOf.get(b) || parentOf.get(parentOf.get(a)!) === parentOf.get(parentOf.get(b)!);
   // Larger moves fail through the layout and text-position checks; here only what stays under them.
   return all.filter((t) => Math.max(Math.abs(t.dx), Math.abs(t.dy)) <= TEXT_SHIFT_PX && (t.dw || Math.max(Math.abs(t.dx), Math.abs(t.dy)) > TEXT_NUDGE_PX)).map((t) => {
     const c = Math.abs(t.dx) > TEXT_NUDGE_PX ? wide.find((w) => w.id !== t.id && near(w.id, t.id) && Math.abs(Math.abs(w.dw) - Math.abs(t.dx)) <= 0.5) : undefined;
-    return c ? { ...t, cause: { id: c.id, text: c.text, dw: c.dw } } : t;
+    return c ? { ...t, cause: { id: c.id, text: c.text, dw: c.dw, ...(c.engine ? { engine: true } : {}) } } : t;
   });
 }
 
@@ -392,6 +399,7 @@ export function reportMarkdown(r: VerifyReport): string {
   const toFix = r.findings?.filter((f) => f.severity === 'fix') ?? [], toCheck = r.findings?.filter((f) => f.severity === 'check') ?? [];
   if (toFix.length) md.push('## Fix these first (look at each picture)', '', 'Each picture: left = Figma (green outline), right = your app (red outline). One row can stand for several layers with one shared cause.', '', ...toFix.map(row), '');
   if (toCheck.length) md.push('## Small differences (page passes; fix these for pixel-perfect)', '', 'Measured differences under the failing tolerance, each with its exact px and cause. Glyph-edge smoothing of a text that is in place is not listed.', '', ...toCheck.map(row), '');
+  if (r.engineNote) md.push('## Text width vs Figma (not counted)', '', r.engineNote, '');
   const wraps = r.lines?.filter((l) => l.kind !== 'align') ?? [];
   if (wraps.length) md.push('## Text lines differ (fix these)', '', 'The words wrap at other places than in Figma.', '', ...wraps.map((l) => `- ${l.id}: Figma "${l.figma.join(' / ')}" → app "${l.app.join(' / ')}". Fix: ${l.hint ?? 'keep the Figma line breaks'}`), '');
   const shifts = shiftGroups(r.lines ?? []);
@@ -439,7 +447,7 @@ export function fixPrompt(r: VerifyReport, slug: string): string | null {
     ...(typeof F2F_VERSION === 'string' ? [`- First run \`npx f2f --version\`: it must be ${F2F_VERSION} or newer, the version that measured this list. If it is older, update f2f-cli to the latest version first (with the project's package manager), because older versions do not measure these items.`] : []),
     '- When one row names several ids, they share one cause: fix it once in the shared component, class or token.',
     '- When a row says another text is the cause, fix only that cause, not the position of this one.',
-    '- "text width" means the font file draws those characters at another width than the font in Figma: load the same font version the design uses; never add padding or letter-spacing for it.',
+    '- "text width" means the app draws the text wider or narrower than Figma with the same style, more than the two text engines differ: check the characters and the font file the app loads; never add padding or letter-spacing for it.',
     '- Do not change anything that is not listed. Never use --window or --tolerance.',
     `- Run \`${/^https?:/.test(url) ? `f2f verify --screen ${r.screen.id} --url ${url}` : 'f2f verify'}\` after your changes and repeat until it shows PASS and no "Small differences"; start the app first if it is not running, and stop any dev server you started.`,
     `- Report what you changed for each number above, and anything you could not fix with the reason.`,

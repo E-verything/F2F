@@ -49,7 +49,7 @@ async function findings(r: VerifyReport, figma: Image, app: Image, dir: string, 
   // Where each design text is in the app (found by its words), so a moved text is told apart from an absent one.
   const origin = m.nodes[screen.root.id] ?? { x: 0, y: 0 };
   const where = new Map(m.lines ? pairTexts(screen, m.lines, origin).map((x) => [x.n.id, { dx: Math.round(x.near.x - origin.x - x.b.x), dy: Math.round(x.near.y - origin.y - x.b.y) }]) : []);
-  const words = (dx: number, dy: number, flip = false) => [dy ? `${Math.abs(dy)}px ${(dy > 0) !== flip ? 'lower' : 'higher'}` : '', dx ? `${Math.abs(dx)}px ${(dx > 0) !== flip ? 'right' : 'left'}` : ''].filter(Boolean).join(' and ');
+  const words = (dx: number, dy: number, flip = false) => [dy ? `${Math.abs(dy)}px ${(dy > 0) !== flip ? 'lower' : 'higher'}` : '', dx ? `${Math.abs(dx)}px ${(dx > 0) !== flip ? 'further right' : 'further left'}` : ''].filter(Boolean).join(' and ');
   // Measured and in place once the shift of its neighbours is explained (e.g. text drawn a little narrower before it): a pixel move there is not its own error.
   const placed = new Set([...measured].filter((id) => !r.mismatches.some((m) => m.id === id)));
   const boxOf = (id: string) => nodeOf(id)?.calculated?.screenBox;
@@ -130,14 +130,19 @@ async function findings(r: VerifyReport, figma: Image, app: Image, dir: string, 
   const nudges = m.lines ? textNudges(screen, m.lines, origin).filter((t) => !taken.has(t.id)) : [];
   const px = (v: number) => `${Math.abs(v)}px`, round1 = (v: number) => Math.round(v * 10) / 10;
   // One font file is one cause: all texts drawn at another width are one finding.
-  const widths = nudges.filter((x) => x.dw).sort((a, b) => Math.abs(b.dw) - Math.abs(a.dw));
+  const w = (x: (typeof nudges)[number]) => `"${x.text.slice(0, 30)}" ${px(x.dw)} ${x.dw < 0 ? 'narrower' : 'wider'} (${round1(x.box.width + x.dw)}px vs ${round1(x.box.width)}px)`;
+  // Within the text-engine difference: nothing in code or font removes it, so it is a note, not a finding (a neighbour it pushed is too).
+  const engine = nudges.filter((x) => x.engine || x.cause?.engine);
+  if (engine.length) r.engineNote = `These texts are 1-3px (about 1% of their width) wider or narrower in the browser than Figma lays them out, with the same font family, size, weight and spacing (or moved by such a neighbour). Cause not confirmed: Figma lays them out this way even when retyped, and Inter 3.19/4.0/4.1, CSS font features, optical sizes and kerning all give the same browser width. Not counted as a failure. To place the layers next to such a text exactly, give it the Figma width (the box in its outline line): ${engine.slice(0, 6).map((x) => (x.dw ? w(x) : `"${x.text.slice(0, 30)}" moved ${px(round1(x.dx))} by "${x.cause!.text.slice(0, 20)}"`)).join('; ')}${engine.length > 6 ? '; …' : ''}.`;
+  // One font file is one cause: all texts drawn at a clearly other width are one finding.
+  const widths = nudges.filter((x) => x.dw && !x.engine).sort((a, b) => Math.abs(b.dw) - Math.abs(a.dw));
   if (widths.length) {
-    const t = widths[0]!, w = (x: typeof t) => `"${x.text.slice(0, 30)}" ${px(x.dw)} ${x.dw < 0 ? 'narrower' : 'wider'} (${round1(x.box.width + x.dw)}px vs ${round1(x.box.width)}px)`;
-    out.push({ severity: 'check', kind: 'text width', id: t.id, name: t.text, what: `${widths.length > 1 ? `${widths.length} texts are` : 'is'} drawn at another width than in Figma with the same font, size, weight and spacing: ${widths.slice(0, 4).map(w).join('; ')}${widths.length > 4 ? '; …' : ''}`,
-      fix: 'the font file draws some characters (often digits) at another width than the font in Figma: load the same font version the design uses; do not add padding or change spacing for it', box: t.box, actual: { ...t.box, width: t.box.width + t.dw } });
+    const t = widths[0]!;
+    out.push({ severity: 'check', kind: 'text width', id: t.id, name: t.text, what: `${widths.length > 1 ? `${widths.length} texts are` : 'is'} drawn wider or narrower than in Figma with the same font family, size, weight and spacing, more than the two text engines differ: ${widths.slice(0, 4).map(w).join('; ')}${widths.length > 4 ? '; …' : ''}`,
+      fix: 'compare the text and the font file the app loads with the outline line (other characters, another font family file or a missing weight); do not add padding or change spacing for it', box: t.box, actual: { ...t.box, width: t.box.width + t.dw } });
   }
   const moves = new Map<string, typeof nudges>();
-  for (const t of nudges.filter((x) => Math.max(Math.abs(x.dx), Math.abs(x.dy)) > 1.5 && !(x.dw && !x.cause))) {
+  for (const t of nudges.filter((x) => !x.cause?.engine && Math.max(Math.abs(x.dx), Math.abs(x.dy)) > 1.5 && !(x.dw && !x.cause))) {
     const k = `${Math.round(t.dx * 2)}|${Math.round(t.dy * 2)}|${t.cause?.id ?? ''}`;
     moves.set(k, [...(moves.get(k) ?? []), t]);
   }
@@ -145,7 +150,7 @@ async function findings(r: VerifyReport, figma: Image, app: Image, dir: string, 
     const t = list[0]!, many = list.length > 1;
     const where = [Math.abs(t.dy) > 1.5 ? `${px(round1(t.dy))} too ${t.dy > 0 ? 'low' : 'high'}` : '', Math.abs(t.dx) > 1.5 ? `${px(round1(t.dx))} too far ${t.dx > 0 ? 'right' : 'left'}` : ''].filter(Boolean).join(' and ');
     out.push({ severity: 'check', kind: 'small shift', id: t.id, name: t.text, what: `${many ? `${list.length} texts sit` : 'sits'} ${where}${many ? ` (${list.slice(0, 5).map((x) => x.id).join(', ')}${list.length > 5 ? ', …' : ''})` : ''}`,
-      fix: t.cause ? `it moves because "${t.cause.text}" (${t.cause.id}) is drawn ${px(round1(t.cause.dw))} ${t.cause.dw < 0 ? 'narrower' : 'wider'} than in Figma (font version); fix that font, not this position` : `move it ${[Math.abs(t.dy) > 1.5 ? `${px(round1(t.dy))} ${t.dy > 0 ? 'up' : 'down'}` : '', Math.abs(t.dx) > 1.5 ? `${px(round1(t.dx))} to the ${t.dx > 0 ? 'left' : 'right'}` : ''].filter(Boolean).join(' and ')}: check the margin, padding, gap or line-height before it against its outline line`,
+      fix: t.cause ? `it moves because "${t.cause.text}" (${t.cause.id}) is drawn ${px(round1(t.cause.dw))} ${t.cause.dw < 0 ? 'narrower' : 'wider'} than in Figma (see the "text width" row); fix that, not this position` : `move it ${[Math.abs(t.dy) > 1.5 ? `${px(round1(t.dy))} ${t.dy > 0 ? 'up' : 'down'}` : '', Math.abs(t.dx) > 1.5 ? `${px(round1(t.dx))} to the ${t.dx > 0 ? 'left' : 'right'}` : ''].filter(Boolean).join(' and ')}: check the margin, padding, gap or line-height before it against its outline line`,
       box: t.box, actual: { ...t.box, x: t.box.x + t.dx, y: t.box.y + t.dy } });
   }
   // A layer already covered by a finding or a group is not shown again as a pixel difference.
