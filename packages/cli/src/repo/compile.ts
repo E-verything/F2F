@@ -279,20 +279,20 @@ function render(d: any): string {
     ...(d.tagging.verify.includes('--url http') ? ['Every page with a route on the "Screen → route" line of f2f-project.md: `f2f verify --all` (writes the report page too).', ''] : []),
     ...(d.screens.length > 1 && d.tagging.verify.includes('--url http') ? [`All at once: \`f2f verify --screens "${d.screens.map((s: any) => `${s.id}=<route>`).join(',')}" --url http://localhost:${port}\` (routes without the leading slash, empty for the home page)`, ''] : []),
     'Fix the largest mismatches first and re-run.', '');
-  md.push('## Screens', '', ...d.screens.map((s: any) => `- ${s.name} (id \`${s.id}\`) — ${s.viewport.width}x${s.viewport.height}, approval ${s.status.value}: [outline](../${s.outline})`), '');
+  md.push('## Screens', '', ...d.screens.map((s: any) => `- ${s.name} (id \`${s.id}\`) - ${s.viewport.width}x${s.viewport.height}, approval ${s.status.value}: [outline](../${s.outline})`), '');
   md.push('## Components', '', '| Figma | Variants used | Code | Confidence | Evidence |', '|---|---|---|---|---|');
-  for (const r of d.layerReuse) md.push(`| layer "${r.layer}" (${r.nodeIds.map((i: string) => `#${i}`).join(', ')}) | — | \`${r.code.name}\` (${r.code.file})${r.code.params.length ? ` params: ${r.code.params.join(', ')}` : ''} — **reuse, do not rebuild** | exact | ${r.evidence} |`);
+  for (const r of d.layerReuse) md.push(`| layer "${r.layer}" (${r.nodeIds.map((i: string) => `#${i}`).join(', ')}) | - | \`${r.code.name}\` (${r.code.file})${r.code.params.length ? ` params: ${r.code.params.join(', ')}` : ''} - **reuse, do not rebuild** | exact | ${r.evidence} |`);
   const codeCell = (c: any) =>
     c.code ? `\`${c.code.name}\` (${c.code.file})${c.code.params.length ? ` params: ${c.code.params.join(', ')}` : ''}`
-      : c.kind === 'icon' ? `icon — render ${c.icon.join(', ')} (e.g. an SVG widget)`
-      : c.kind === 'system-ui' ? 'system UI (inferred from name) — normally drawn by the OS, do not build'
+      : c.kind === 'icon' ? `icon - render ${c.icon.join(', ')} (e.g. an SVG widget)`
+      : c.kind === 'system-ui' ? 'system UI (inferred from name) - normally drawn by the OS, do not build'
       : '**create new widget**';
-  for (const c of d.components) md.push(`| ${c.figma} | ${c.variants.join('; ') || '—'} | ${codeCell(c)} | ${c.confidence} | ${c.evidence} |`);
+  for (const c of d.components) md.push(`| ${c.figma} | ${c.variants.join('; ') || '-'} | ${codeCell(c)} | ${c.confidence} | ${c.evidence} |`);
   md.push('', '## Colours', '', '| Value | Figma token/style | Uses | Code |', '|---|---|---|---|');
-  for (const c of d.colors) md.push(`| ${c.hex} | ${c.token ?? '—'} | ${c.count} | ${c.code ?? `**none** — ${c.token ? 'add a token' : 'hard-coded in design'}`} |`);
+  for (const c of d.colors) md.push(`| ${c.hex} | ${c.token ?? '-'} | ${c.count} | ${c.code ?? `**none** - ${c.token ? 'add a token' : 'hard-coded in design'}`} |`);
   md.push('', '## Typography', '', '| Family | Style | Size | Figma style | Uses | Code |', '|---|---|---|---|---|---|');
-  for (const t of d.typography) md.push(`| ${t.family} | ${t.style}${t.weight ? ` (${t.weight})` : ''} | ${t.size} | ${t.textStyle ?? '—'} | ${t.count} | ${t.code ?? '**none**'} |`);
-  md.push('', 'Fonts: ' + d.fonts.map((f: any) => `${f.family} — ${f.status}; load these weights/styles: ${f.styles.join(', ')}`).join('; ') + '. A missing italic or weight is faked by the browser and changes text widths.', '');
+  for (const t of d.typography) md.push(`| ${t.family} | ${t.style}${t.weight ? ` (${t.weight})` : ''} | ${t.size} | ${t.textStyle ?? '-'} | ${t.count} | ${t.code ?? '**none**'} |`);
+  md.push('', 'Fonts: ' + d.fonts.map((f: any) => `${f.family} - ${f.status}; load these weights/styles: ${f.styles.join(', ')}`).join('; ') + '. A missing italic or weight is faked by the browser and changes text widths.', '');
   // Assets already in the repo under their export file name collapse to one line per folder; listing each costs the agent tokens for no decision.
   const base = (p: string) => p.slice(p.lastIndexOf('/') + 1);
   const sameName = new Map<string, number>();

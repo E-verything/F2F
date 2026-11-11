@@ -48,7 +48,7 @@ The report in `f2f/verification/<screen>.md` gives PASS/FAIL with:
 - **Style (web):** computed font family, weight, italic, size, text colour, background and corner radius against the Figma values, plus fonts the browser fakes because their file is not loaded.
 - **Small screen (web):** no sideways scrolling or cut-off content at 375 px.
 - **Code rules:** no computed Figma ids, no raw two-decimal sizes or spacing copied from Figma.
-- **Overflow, coverage, small differences** (text 1.5–4 px off or drawn at another width), and on web a diff image as a visual hint.
+- **Overflow, coverage, small differences** (text 1.5-4 px off or drawn at another width), and on web a diff image as a visual hint.
 - **A fix prompt per screen** (`f2f/verification/<screen>.prompt.md`, with a copy button in the report) to paste into any coding agent.
 
 ## Other commands
@@ -67,7 +67,7 @@ The report in `f2f/verification/<screen>.md` gives PASS/FAIL with:
 | `packages/plugin/` | Figma plugin (`manifest.json`, extractor, UI) | Figma Community plugin |
 | `packages/cli/` | `f2f` command: inspect, build, verify, bench, Flutter templates | npm package |
 | `website/` | Product site and docs (Astro); `/docs` renders `docs/getting-started.md` | Static site |
-| `tests/` | Tests for all packages; `npm run check` builds and tests everything | — |
+| `tests/` | Tests for all packages; `npm run check` builds and tests everything | - |
 
 ## Package layout
 

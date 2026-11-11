@@ -64,7 +64,7 @@ async function findings(r: VerifyReport, figma: Image, app: Image, dir: string, 
   }
   // The same wrong value on several texts is one wrong class or token.
   const byStyle = new Map<string, StyleMismatch[]>();
-  for (const s of r.styles.filter((x) => x.id !== '—')) { const k = `${s.property}|${s.expected}|${s.actual}`; byStyle.set(k, [...(byStyle.get(k) ?? []), s]); }
+  for (const s of r.styles.filter((x) => x.id !== '-')) { const k = `${s.property}|${s.expected}|${s.actual}`; byStyle.set(k, [...(byStyle.get(k) ?? []), s]); }
   for (const [, list] of [...byStyle].sort((a, b) => b[1].length - a[1].length).slice(0, 4)) {
     const s = list[0]!, box = boxOf(s.id);
     if (box) out.push({ severity: 'fix', kind: 'style', id: s.id, name: s.name, what: `${list.length > 1 ? `${list.length} texts have` : 'has'} ${s.property} ${s.actual} instead of ${s.expected}${list.length > 1 ? ` (${list.slice(0, 5).map((x) => x.id).join(', ')}${list.length > 5 ? ', …' : ''})` : ''}`, fix: `set ${s.property}: ${s.expected}${list.length > 1 ? ' in the class or token these texts share' : ''}`, box });

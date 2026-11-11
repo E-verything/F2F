@@ -21,7 +21,7 @@ A real, authorised Figma file of a sample social app on the free plan: the 2 scr
 
 | Artifact | Bytes | Tokens (est.) |
 |---|---|---|
-| Whole package (95 files) | 2.67 MB | — (1.63 MB are images/SVGs) |
+| Whole package (95 files) | 2.67 MB | - (1.63 MB are images/SVGs) |
 | Screen JSON (full reference), per screen | ~245 KB | ~70k |
 | **Screen outline** (what the agent reads), per screen | ~39 KB | **~11k** |
 | Feature brief (both screens, repo mapping, rules, verify steps) | 19 KB | ~5.5k |
@@ -31,7 +31,7 @@ Reading the brief plus one outline is about 17k tokens. The first unoptimised ex
 
 ## End-to-end agent run (web)
 
-A 6-page Next.js 15 site (AC installation service, 1280 px wide, about 350–560 Figma layers per page), built with Claude Code by following only the getting-started guide. Usage is Claude Code's 5-hour session meter.
+A 6-page Next.js 15 site (AC installation service, 1280 px wide, about 350-560 Figma layers per page), built with Claude Code by following only the getting-started guide. Usage is Claude Code's 5-hour session meter.
 
 | Step | Usage | Result |
 |---|---|---|
@@ -47,7 +47,7 @@ The 0.1.1 brief for the five pages is about 4k tokens (was 8k). Outlines carry f
 | Command | Time |
 |---|---|
 | CLI start (no-op) | ~160 ms |
-| `validate` (95 files, schema + hashes + references) | ~240–390 ms |
+| `validate` (95 files, schema + hashes + references) | ~240-390 ms |
 | `inspect` (Flutter repo, 74 items) | ~37 ms |
 | `build --feature` (brief) | ~23 ms |
 | `verify --url` (launch Chrome, load a Flutter web app, measure, screenshot, diff) | ~4.9 s |
@@ -71,7 +71,7 @@ What the report caught:
 
 The lessons are now rules in every DESIGN.md and brief ("Figma → code rules").
 
-What remains is not layout. Text widths are 3–8% wider because Chrome renders Google Fonts' Urbanist build with different glyph advances than the designer's Figma font. The verifier reports these as warnings, plus one chip that hugs that text.
+What remains is not layout. Text widths are 3-8% wider because Chrome renders Google Fonts' Urbanist build with different glyph advances than the designer's Figma font. The verifier reports these as warnings, plus one chip that hugs that text.
 
 ## Not yet measured
 

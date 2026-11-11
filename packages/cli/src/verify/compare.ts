@@ -191,7 +191,7 @@ export function compare(screen: ScreenFile, m: Measurements, tolerancePx = 1): V
   // Untagged text counts too: a faked italic or weight changes every line it is used on.
   for (const f of m.fakedFonts ?? []) {
     const [font, ...sample] = f.split(': ');
-    styles.push({ id: '—', name: 'page text', property: 'font file', expected: font!, actual: `not loaded, the browser fakes it (${sample.join(': ')})` });
+    styles.push({ id: '-', name: 'page text', property: 'font file', expected: font!, actual: `not loaded, the browser fakes it (${sample.join(': ')})` });
   }
   mismatches.sort((a, b) => Math.max(...Object.values(b.delta).map(Math.abs)) - Math.max(...Object.values(a.delta).map(Math.abs)) || a.id.localeCompare(b.id));
   const measuredIds = new Set(Object.keys(m.nodes).filter((id) => byId.has(id)));
@@ -413,7 +413,7 @@ export function reportMarkdown(r: VerifyReport): string {
   }
   if (r.styles.length) md.push('## Style differences (fix these)', '', 'Exact computed CSS vs the Figma values, so font rendering does not matter here.', '', '| Layer | id | Property | Figma | App |', '|---|---|---|---|---|', ...r.styles.slice(0, 50).map((x) => `| ${x.name} | ${x.id} | ${x.property} | ${x.expected} | ${x.actual} |`), r.styles.length > 50 ? `| … ${r.styles.length - 50} more in the JSON report | | | | |` : '', '');
   if (r.narrow) md.push(`## Small screen (${r.narrow.width}px wide)`, '', r.narrow.ok ? 'OK: no horizontal scroll, no content cut off.' : `**FAIL**: page is ${r.narrow.scrollWidth}px wide (scrolls sideways) or content is cut off. Make the layout fluid (see "Production code rules" in the brief). Cut off (figma id, text):`, ...r.narrow.cutOff.map((c) => `- ${c}`), '');
-  if (r.code?.length) md.push('## Code rules (fix these)', '', 'Production code rules checked in the source.', '', ...r.code.map((c) => `- ${c.file}:${c.line} — ${c.rule}: ${c.text}`), '');
+  if (r.code?.length) md.push('## Code rules (fix these)', '', 'Production code rules checked in the source.', '', ...r.code.map((c) => `- ${c.file}:${c.line} - ${c.rule}: ${c.text}`), '');
   if (r.overflow.length) md.push('## Text overflow', '', ...r.overflow.map((o) => `- ${o.name} (${o.id})${o.text ? `: "${o.text}"` : ''}`), '');
   if (r.missingKeyNodes.length) md.push(`## Not tagged (tag these to verify them)`, '', ...r.missingKeyNodes.slice(0, 40).map((n) => `- ${n.name} (${n.id})`), r.missingKeyNodes.length > 40 ? `- … ${r.missingKeyNodes.length - 40} more` : '', '');
   if (r.unknownIds.length) md.push(`Tagged ids not in this screen (typo or other screen): ${r.unknownIds.slice(0, 20).join(', ')}`, '');

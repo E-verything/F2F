@@ -17,7 +17,7 @@ export function describe(m: Pick<Mismatch, 'delta'>): string {
   if (Math.abs(d.height) > 1) out.push(`${r1(Math.abs(d.height))}px too ${d.height > 0 ? 'tall' : 'short'}`);
   if (Math.abs(d.x) > 1) out.push(`${r1(Math.abs(d.x))}px too far ${d.x > 0 ? 'right' : 'left'}`);
   if (Math.abs(d.y) > 1) out.push(`${r1(Math.abs(d.y))}px too ${d.y > 0 ? 'low' : 'high'}`);
-  return out.join(', ') || 'within 1–2px';
+  return out.join(', ') || 'within 1-2px';
 }
 
 export async function loadReports(pkgDir: string, only?: Set<string>): Promise<ScreenReport[]> {
@@ -103,7 +103,7 @@ code{font-size:12px}a{color:inherit}
 .prompt{margin:12px 0}.prompt summary{cursor:pointer;font-weight:600}.prompt pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;max-height:50vh;overflow:auto}.prompt .copy{margin:8px 0;padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
 </style></head><body><main>
 <h1>F2F verify report</h1><p class="note">${pass}/${screens.length} screens pass. Each section shows when that page was verified. Run <code>f2f verify</code> again after changing code; <code>f2f report</code> shows every page verified so far.</p>
-<div class="summary"><table><thead><tr><th>Screen</th><th>Result</th><th>Layers in place</th><th>Style diffs</th><th>Small screen</th><th>Text lines</th><th>Pixels really differing</th></tr></thead><tbody>${screens.map((s, i) => { const r = s.report, sm = r.summary; return `<tr><td><a href="#s${i}">${esc(r.screen.name)}</a></td><td>${badge(sm.verdict)}</td><td>${sm.passed}/${sm.measured}</td><td>${sm.styleFailed}</td><td>${r.narrow ? (r.narrow.ok ? 'OK' : 'FAIL') : '—'}</td><td>${r.lines ? (r.lines.length ? `${r.lines.length} differ` : 'OK') : '—'}</td><td>${r.visual && !Number.isNaN(r.visual.mismatchRatio) ? `${Math.round(r.visual.mismatchRatio * 1000) / 10}%` : '—'}</td></tr>`; }).join('')}</tbody></table></div>
+<div class="summary"><table><thead><tr><th>Screen</th><th>Result</th><th>Layers in place</th><th>Style diffs</th><th>Small screen</th><th>Text lines</th><th>Pixels really differing</th></tr></thead><tbody>${screens.map((s, i) => { const r = s.report, sm = r.summary; return `<tr><td><a href="#s${i}">${esc(r.screen.name)}</a></td><td>${badge(sm.verdict)}</td><td>${sm.passed}/${sm.measured}</td><td>${sm.styleFailed}</td><td>${r.narrow ? (r.narrow.ok ? 'OK' : 'FAIL') : '-'}</td><td>${r.lines ? (r.lines.length ? `${r.lines.length} differ` : 'OK') : '-'}</td><td>${r.visual && !Number.isNaN(r.visual.mismatchRatio) ? `${Math.round(r.visual.mismatchRatio * 1000) / 10}%` : '-'}</td></tr>`; }).join('')}</tbody></table></div>
 ${screens.length ? screens.map(screenSection).join('\n') : '<section><p>No verify results yet. Run <code>f2f verify --screen &lt;id&gt; --url &lt;url&gt;</code> first.</p></section>'}
 </main><script>
 for(const sec of document.querySelectorAll('section[data-vw]')){
