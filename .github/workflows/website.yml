@@ -23,9 +23,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # Until f2f.js.org is live the site is served at e-verything.github.io/F2F; then set SITE_URL to it and drop BASE_PATH.
-      SITE_URL: https://e-verything.github.io
-      BASE_PATH: /F2F
+      SITE_URL: https://f2f.js.org
       PUBLIC_REPO_URL: https://github.com/E-verything/F2F
     defaults:
       run:
