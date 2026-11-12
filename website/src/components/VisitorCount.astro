@@ -1,0 +1,33 @@
+---
+import Icon from './Icon.astro';
+import { SITE } from '../site';
+---
+
+{SITE.goatcounter && (
+  <span class="visitors" data-visitors={SITE.goatcounter} hidden>
+    <Icon name="eye" size={14} /><span data-visitors-text></span>
+  </span>
+)}
+
+<script>
+  const el = document.querySelector<HTMLElement>('[data-visitors]');
+  const text = el?.querySelector<HTMLElement>('[data-visitors-text]');
+  // Needs "Allow adding visitor counts on your website" enabled in the GoatCounter settings; otherwise it stays hidden.
+  if (el && text) {
+    fetch(`https://${el.dataset.visitors}.goatcounter.com/counter/TOTAL.json`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d: { count?: string; count_unique?: string }) => {
+        const unique = d.count_unique?.trim();
+        const value = unique || d.count?.trim();
+        if (!value) return;
+        text.textContent = `${value} ${unique ? 'visitors' : 'page views'}`;
+        el.hidden = false;
+      })
+      .catch(() => {});
+  }
+</script>
+
+<style>
+  .visitors { display: inline-flex; align-items: center; gap: 6px; }
+  .visitors[hidden] { display: none; }
+</style>

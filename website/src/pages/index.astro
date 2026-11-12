@@ -2,6 +2,10 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import HeroTerminal from '../components/HeroTerminal.astro';
 import DiffDemo from '../components/DiffDemo.astro';
+import DotField from '../components/DotField.astro';
+import VideoFrame from '../components/VideoFrame.astro';
+import Marquee from '../components/Marquee.astro';
+import StarButton from '../components/StarButton.astro';
 import Icon from '../components/Icon.astro';
 import { SITE, url } from '../site';
 
@@ -31,6 +35,8 @@ const platforms = [
   { name: 'iOS', detail: 'Flutter · React Native · SwiftUI', tag: 'accessibilityIdentifier' },
 ] as const;
 
+const stacks = ['React', 'Next.js', 'Vue', 'Svelte', 'HTML', 'Flutter', 'React Native', 'Jetpack Compose', 'SwiftUI', 'Android', 'iOS'] as const;
+
 const softwareJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
@@ -50,7 +56,7 @@ const softwareJsonLd = {
     <div class="container hero-grid">
       <div class="hero-copy fade-up">
         <span class="glass-pill"><span class="dot"></span>Open source · Local-first · Any stack</span>
-        <h1>Figma to frontend.<br /><span class="gradient-text">Measured, not guessed.</span></h1>
+        <h1>Figma to frontend.<br /><em class="accent-serif gradient-text">Measured, not guessed.</em></h1>
         <p class="hero-sub">
           Give your AI coding agent the exact design values and a brief that knows your codebase. Then check the built
           screen against Figma, layer by layer, until it passes.
@@ -58,7 +64,9 @@ const softwareJsonLd = {
         <div class="cta-row hero-ctas">
           <a href={url("/docs")} class="btn btn-primary">Get started <Icon name="arrow" size={18} /></a>
           <a href={url("/how-it-works")} class="btn btn-ghost">See how it works</a>
+          <StarButton />
         </div>
+        <p class="hero-trust"><Icon name="lock" size={16} />Free, MIT licensed. Your designs and code never leave your machine.</p>
       </div>
       <div class="hero-visual fade-up">
         <HeroTerminal />
@@ -73,16 +81,35 @@ const softwareJsonLd = {
     </ul>
   </section>
 
+  <section class="strip" aria-label="Supported stacks">
+    <p class="strip-label">Verifies the stack you already use</p>
+    <Marquee items={stacks} label="Supported frameworks and platforms" />
+  </section>
+
+  <section class="section">
+    <div class="container watch">
+      <div class="watch-copy" data-reveal>
+        <span class="label">See it work</span>
+        <h2>Watch the whole loop, <em class="accent-serif gradient-text">start to PASS.</em></h2>
+        <p>One video: export from Figma, brief your agent, build, then verify layer by layer and fix until the report passes.</p>
+        <a class="text-link" href={`https://youtu.be/${SITE.videoId}`} target="_blank" rel="noopener">Watch on YouTube <Icon name="arrow" size={16} /></a>
+      </div>
+      <div class="watch-media" data-reveal><VideoFrame /></div>
+    </div>
+  </section>
+
   <section class="section">
     <div class="container">
-      <header class="section-head">
-        <span class="label">The loop</span>
-        <h2>Three tools. One loop. Pixel-checked.</h2>
-        <p>A Figma plugin, a CLI and the AI agent you already use. Each does one job.</p>
+      <header class="split-head" data-reveal>
+        <div>
+          <span class="label">The loop</span>
+          <h2>Three tools. One loop. <em class="accent-serif gradient-text">Pixel-checked.</em></h2>
+        </div>
+        <p>A Figma plugin, a CLI and the AI agent you already use. Each does one job, and the last step proves the result.</p>
       </header>
       <ol class="parts" role="list">
         {parts.map((p) => (
-          <li class="glass-card hoverable part">
+          <li class="glass-card hoverable spot part" data-reveal>
             <span class="part-step">{p.step}</span>
             <span class="part-icon"><Icon name={p.icon} /></span>
             <h3>{p.name}</h3>
@@ -91,6 +118,19 @@ const softwareJsonLd = {
           </li>
         ))}
       </ol>
+    </div>
+  </section>
+
+  <section class="section band">
+    <div class="container">
+      <header class="split-head" data-reveal>
+        <div>
+          <span class="label">The gap, closing</span>
+          <h2>Every pixel off, found. <em class="accent-serif gradient-text">Then fixed.</em></h2>
+        </div>
+        <p>Teal is the Figma box, violet is your first build, off by the same pixels the report lists. Move your cursor through the dots, then watch the fix snap into place.</p>
+      </header>
+      <DotField />
     </div>
   </section>
 
@@ -110,13 +150,16 @@ const softwareJsonLd = {
 
   <section class="section">
     <div class="container">
-      <header class="section-head">
-        <span class="label">Why it works</span>
-        <h2>Built for real codebases, not demos.</h2>
+      <header class="split-head" data-reveal>
+        <div>
+          <span class="label">Why it works</span>
+          <h2>Built for real codebases, <em class="accent-serif gradient-text">not demos.</em></h2>
+        </div>
+        <p>Six decisions that keep the agent honest and your repo clean.</p>
       </header>
       <div class="features">
         {features.map((f) => (
-          <article class="glass-card hoverable feat">
+          <article class="glass-card hoverable spot feat" data-reveal>
             <span class="part-icon"><Icon name={f.icon} /></span>
             <h3>{f.title}</h3>
             <p>{f.body}</p>
@@ -134,7 +177,7 @@ const softwareJsonLd = {
       </header>
       <ul class="platforms" role="list">
         {platforms.map((p) => (
-          <li class="glass-card platform">
+          <li class="glass-card spot platform" data-reveal>
             <h3>{p.name}</h3>
             <p>{p.detail}</p>
             <code>{p.tag}</code>
@@ -146,12 +189,12 @@ const softwareJsonLd = {
 
   <section class="section">
     <div class="container">
-      <div class="glass-card cta-card">
+      <div class="glass-card cta-card" data-reveal>
         <h2>Your next page, measured against the design.</h2>
         <p>Free. Open source. Your designs and code never leave your machine.</p>
         <div class="cta-row">
           <a href={url("/docs")} class="btn btn-primary">Read the quick start <Icon name="arrow" size={18} /></a>
-          {SITE.repoUrl && <a href={SITE.repoUrl} class="btn btn-ghost" target="_blank" rel="noopener"><Icon name="github" size={18} />View source</a>}
+          <StarButton />
         </div>
       </div>
     </div>
@@ -172,6 +215,18 @@ const softwareJsonLd = {
   .hero-sub { max-width: 52ch; font-size: 1.125rem; margin-bottom: var(--space-xl); }
   .hero-ctas { justify-content: flex-start; }
   .hero-visual { min-width: 0; animation-delay: 0.12s; }
+  .hero-copy h1 { font-size: clamp(2.25rem, 4.6vw, 3.75rem); line-height: 1.06; }
+  .hero-trust { display: flex; align-items: center; gap: var(--space-s); margin-top: var(--space-l); font-size: 0.875rem; color: var(--text-secondary); }
+  .hero-trust :global(svg) { color: var(--accent-2); flex-shrink: 0; }
+
+  .watch { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: var(--space-3xl); align-items: center; }
+  .watch-copy h2 { margin: var(--space-s) 0 var(--space-l); font-size: clamp(2rem, 4vw, 3.25rem); text-wrap: balance; }
+  .watch-copy p { max-width: 40ch; font-size: 1.0625rem; margin-bottom: var(--space-l); }
+  .text-link { display: inline-flex; align-items: center; gap: var(--space-s); font-weight: 650; color: var(--text-primary); padding-bottom: 4px; border-bottom: 1.5px solid var(--text-tertiary); }
+  .text-link:hover { color: var(--accent-2); border-color: var(--accent-2); }
+
+  .strip { padding: var(--space-2xl) 0; display: grid; gap: var(--space-l); }
+  .strip-label { text-align: center; font-size: 0.8125rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); }
 
   .stats {
     list-style: none;
@@ -260,6 +315,8 @@ const softwareJsonLd = {
     .hero-copy { text-align: center; }
     .hero-sub { margin-left: auto; margin-right: auto; }
     .hero-ctas { justify-content: center; }
+    .hero-trust { justify-content: center; }
+    .watch { grid-template-columns: 1fr; gap: var(--space-2xl); }
     .hero-visual { max-width: 640px; width: 100%; margin: 0 auto; }
     .parts { grid-template-columns: repeat(2, 1fr); }
     .features { grid-template-columns: repeat(2, 1fr); }

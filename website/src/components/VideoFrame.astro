@@ -1,0 +1,115 @@
+---
+import { SITE, url } from '../site';
+
+const watchUrl = `https://youtu.be/${SITE.videoId}`;
+const embedUrl = `https://www.youtube-nocookie.com/embed/${SITE.videoId}?autoplay=1&rel=0`;
+---
+
+<div class="video-frame" data-video data-embed={embedUrl}>
+  <button type="button" class="vf-poster" aria-label="Play the F2F product video">
+    <img src={url('/video-poster.webp')} alt="F2F: your design, built exactly" width="1280" height="720" loading="lazy" decoding="async" />
+    <span class="vf-play" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg></span>
+  </button>
+  <div class="chip chip-top" aria-hidden="true"><strong>±1 px</strong><span>geometry check per layer</span></div>
+  <div class="chip chip-bottom" aria-hidden="true"><strong>5 / 5</strong><span>pages PASS on the first try</span></div>
+  <noscript><a class="vf-link" href={watchUrl} rel="noopener">Watch the product video on YouTube</a></noscript>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-video]').forEach((frame) => {
+    frame.querySelector('.vf-poster')?.addEventListener('click', () => {
+      const iframe = document.createElement('iframe');
+      iframe.src = frame.dataset.embed ?? '';
+      iframe.title = 'F2F product video';
+      iframe.allow = 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen';
+      iframe.allowFullscreen = true;
+      iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+      iframe.className = 'vf-iframe';
+      frame.querySelector('.vf-poster')?.replaceWith(iframe);
+      frame.classList.add('is-playing');
+    });
+  });
+</script>
+
+<style>
+  .video-frame { position: relative; }
+
+  .vf-poster {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-strong);
+    background: var(--bg-deep);
+    box-shadow: 0 40px 100px -30px rgba(0, 0, 0, 0.8), 0 30px 90px -40px var(--accent);
+    transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.5s ease;
+  }
+  .vf-poster img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .vf-poster:hover { transform: translateY(-4px); }
+  .vf-poster:hover img { transform: scale(1.03); }
+
+  /* Light round play button overlapping the bottom-right corner, like a published video card. */
+  .vf-play {
+    position: absolute;
+    right: var(--space-l);
+    bottom: var(--space-l);
+    display: grid;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: #f4f1ff;
+    color: var(--on-accent);
+    box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.6);
+    transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .vf-play svg { margin-left: 3px; }
+  .vf-poster:hover .vf-play { transform: scale(1.1); }
+
+  /* The iframe is created by script after the click, so scoped styles cannot reach it. */
+  :global(.vf-iframe) {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 0;
+    border-radius: var(--radius-xl);
+    box-shadow: 0 40px 100px -30px rgba(0, 0, 0, 0.8), 0 30px 90px -40px var(--accent);
+  }
+
+  /* Floating proof cards that overlap the frame edge and drift slowly. */
+  .chip {
+    position: absolute;
+    display: grid;
+    gap: 2px;
+    padding: var(--space-m) var(--space-l);
+    border-radius: var(--radius-l);
+    pointer-events: none;
+    animation: drift 7s ease-in-out infinite;
+  }
+  .chip strong { font-size: clamp(1.5rem, 2.6vw, 2.25rem); line-height: 1.05; letter-spacing: -0.03em; }
+  .chip span { font-size: 0.8125rem; font-weight: 600; }
+  .chip-top { top: -22px; right: -18px; background: #f4f1ff; color: var(--on-accent); box-shadow: 0 20px 40px -16px rgba(0, 0, 0, 0.6); }
+  .chip-bottom { left: -22px; bottom: 56px; background: #0f2c28; border: 1px solid rgba(45, 212, 191, 0.45); color: var(--text-primary); animation-delay: -3.5s; box-shadow: 0 20px 40px -16px rgba(0, 0, 0, 0.6); }
+  .chip-bottom strong { color: var(--accent-2); }
+  .is-playing .chip { display: none; }
+
+  @keyframes drift { 50% { transform: translateY(-8px); } }
+
+  .vf-link { display: block; padding: var(--space-xl); text-align: center; }
+
+  @media (max-width: 900px) {
+    .chip-top { right: 8px; top: -18px; }
+    .chip-bottom { left: 8px; bottom: 44px; }
+    .vf-play { width: 56px; height: 56px; }
+  }
+
+  @media (max-width: 640px) {
+    .chip { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chip { animation: none; }
+  }
+</style>

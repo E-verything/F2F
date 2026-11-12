@@ -1,0 +1,54 @@
+---
+import Icon from './Icon.astro';
+import { SITE } from '../site';
+
+const repo = SITE.repoUrl;
+const slug = repo ? new URL(repo).pathname.replace(/^\/|\/$/g, '') : null;
+---
+
+{repo && slug && (
+  <a class="btn btn-ghost star" href={repo} target="_blank" rel="noopener" aria-label="Star F2F on GitHub">
+    <Icon name="star" size={18} />
+    <span>Star on GitHub</span>
+    <span class="star-count" data-star-count data-repo={slug} hidden></span>
+  </a>
+)}
+
+<script>
+  const counts = document.querySelectorAll<HTMLElement>('[data-star-count]');
+  const slug = counts[0]?.dataset.repo;
+  // The star count is cosmetic: any failure or rate limit just leaves it hidden.
+  const format = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n));
+  // A count of 0 is hidden so a new repo shows only the button.
+  const show = (n: number) => { if (n > 0) counts.forEach((el) => { el.textContent = format(n); el.hidden = false; }); };
+
+  if (slug) {
+    const key = `f2f-stars-${slug}`;
+    let cached: string | null = null;
+    try { cached = sessionStorage.getItem(key); } catch { /* storage blocked */ }
+    if (cached) {
+      show(Number(cached));
+    } else {
+      fetch(`https://api.github.com/repos/${slug}`)
+        .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+        .then((d: { stargazers_count?: number }) => {
+          if (typeof d.stargazers_count !== 'number') return;
+          show(d.stargazers_count);
+          try { sessionStorage.setItem(key, String(d.stargazers_count)); } catch { /* storage blocked */ }
+        })
+        .catch(() => {});
+    }
+  }
+</script>
+
+<style>
+  .star :global(svg) { color: var(--warn); }
+  .star-count {
+    padding: 2px 10px;
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+  .star-count[hidden] { display: none; }
+</style>

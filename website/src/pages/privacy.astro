@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { SITE } from '../site';
 
 const title = 'Privacy - F2F';
 const description = 'F2F runs entirely on your machine. The Figma plugin has no network access, the CLI never uploads anything and there is no telemetry.';
@@ -8,7 +9,9 @@ const points = [
   { h: 'Figma plugin', p: 'The plugin manifest allows no network domains, so it cannot send data anywhere. It reads the selected design, builds a ZIP in Figma and saves it where your downloads go.' },
   { h: 'CLI', p: 'The CLI reads the exported folder and your repository on your own computer. It never opens env or key files and makes no network requests, except to the local app you ask it to verify.' },
   { h: 'Verification', p: 'Verify drives a browser, emulator or simulator you already have installed. Screenshots and reports are written into your project folder.' },
-  { h: 'This website', p: 'No analytics, no cookies, no tracking scripts and no third-party fonts. Pages are static HTML.' },
+  { h: 'This website', p: SITE.goatcounter
+    ? 'Pages are static HTML with no cookies and no third-party fonts. Visits are counted anonymously with GoatCounter (no personal data, skipped when your browser sends Do Not Track), and the public visit count and the GitHub star count are fetched from GoatCounter and GitHub when a page loads. The product video loads from YouTube only when you press play.'
+    : 'No analytics, no cookies and no third-party fonts. Pages are static HTML. The GitHub star count is fetched from GitHub when a page loads, and the product video loads from YouTube only when you press play.' },
   { h: 'Your AI agent', p: 'Your agent and its provider have their own terms. F2F only writes files the agent reads; it never sends them to a model.' },
 ] as const;
 ---

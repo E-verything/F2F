@@ -130,8 +130,8 @@ pre code {
 /* Shared glass building blocks */
 .glass-card {
   background: var(--glass-bg);
-  backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-xl);
   box-shadow: var(--glass-highlight);
@@ -155,8 +155,8 @@ pre code {
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-label);
-  backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
 }
 
 .dot {
@@ -205,8 +205,8 @@ pre code {
   background: var(--glass-bg);
   color: var(--text-primary);
   border: 1px solid var(--border-glass);
-  backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
 }
 
 .btn-ghost:hover {
@@ -287,6 +287,69 @@ pre code {
   }
   .cta-row > .btn { width: 100%; }
   .lede { font-size: 1rem; }
+}
+
+/* One italic serif voice inside a sans headline: the eye lands on the accent phrase first. */
+.accent-serif {
+  font-family: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+/* Scroll reveal: content is only hidden when JS is running, so no-JS visitors see everything. */
+.js [data-reveal] { opacity: 0; transform: translateY(24px); }
+/* The revealed state owns the transition so card hover (background, border, lift) keeps working after the entrance. */
+.js [data-reveal].is-in {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.7s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 0.45s ease,
+    border-color 0.45s ease,
+    box-shadow 0.45s ease;
+}
+
+/* Cursor spotlight: the pointer position is written to --mx / --my by the layout script. */
+.spot { position: relative; overflow: hidden; }
+.spot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 50%), rgba(139, 108, 255, 0.18), transparent 65%);
+  transition: opacity 0.3s ease;
+}
+.spot:hover::before { opacity: 1; }
+.spot > * { position: relative; z-index: 1; }
+
+/* Split header: eyebrow and headline left, one explaining line right. */
+.split-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: var(--space-2xl);
+  align-items: end;
+  margin-bottom: var(--space-2xl);
+}
+.split-head h2 { margin-top: var(--space-s); font-size: clamp(2rem, 4.4vw, 3.5rem); text-wrap: balance; }
+.split-head p { font-size: 1.0625rem; max-width: 46ch; }
+
+/* Deeper full-bleed band that marks the most important section of a page. */
+.band {
+  background: linear-gradient(180deg, transparent, rgba(139, 108, 255, 0.07) 20%, rgba(45, 212, 191, 0.04) 80%, transparent);
+  border-top: 1px solid var(--border-glass);
+  border-bottom: 1px solid var(--border-glass);
+}
+
+@media (max-width: 900px) {
+  .split-head { grid-template-columns: 1fr; gap: var(--space-m); align-items: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js [data-reveal] { opacity: 1; transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

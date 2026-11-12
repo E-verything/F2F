@@ -4,7 +4,10 @@ export const SITE = {
   tagline: 'Figma to working frontend, measured, with any AI coding agent.',
   cli: 'f2f',
   license: 'MIT',
+  videoId: 'UABhjvub_Zs',
   repoUrl: import.meta.env.PUBLIC_REPO_URL || null,
+  // GoatCounter site code for anonymous visit counting; counting and the public count stay off until it is set.
+  goatcounter: import.meta.env.PUBLIC_GOATCOUNTER_CODE || null,
 } as const;
 
 // Internal links go through url() so the site works at a domain root and under a sub-path (BASE_PATH).

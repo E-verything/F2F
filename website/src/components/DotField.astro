@@ -1,0 +1,236 @@
+---
+// Signature moment: the Figma box and your build drawn as dots that part around the cursor; the build misses by the same pixels as the verify report, then snaps into place.
+---
+
+<div class="dotfield" data-dotfield>
+  <canvas class="df-canvas" aria-hidden="true"></canvas>
+  <span class="df-tag df-fig">Figma box</span>
+  <span class="df-tag df-build">Your build</span>
+  <output class="df-status" data-state="fail" aria-live="polite">First build · FAIL</output>
+  <noscript><p class="df-fallback">First build: title Δy +8, avatar Δw -4 Δh -4, button Δw +24. After the fix: PASS.</p></noscript>
+</div>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-dotfield]');
+  const canvas = root?.querySelector<HTMLCanvasElement>('.df-canvas');
+  const status = root?.querySelector<HTMLElement>('.df-status');
+  const ctx = canvas?.getContext('2d');
+
+  if (root && canvas && status && ctx) {
+    const W = 1000;
+    const H = 360;
+    const STEP = 5;
+    const PUSH_RADIUS = 90;
+    const CYCLE_MS = 3600;
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const css = getComputedStyle(document.documentElement);
+    const color = (name: string) => css.getPropertyValue(name).trim();
+    const COLORS = { fig: color('--accent-2'), fail: color('--accent'), pass: color('--pass') };
+
+    type Dot = { hx: number; hy: number; fx: number; fy: number; x: number; y: number; el: number };
+    const pt = (x: number, y: number) => ({ x, y });
+
+    // Walks a rounded rectangle outline in even steps; a circle is a rounded rectangle with r = w / 2.
+    const outline = (x: number, y: number, w: number, h: number, r: number) => {
+      const out: { x: number; y: number }[] = [];
+      const arc = (cx: number, cy: number, a0: number) => {
+        const n = Math.max(2, Math.round((Math.PI / 2) * r / STEP));
+        for (let i = 0; i < n; i++) {
+          const a = a0 + (i / n) * (Math.PI / 2);
+          out.push(pt(cx + r * Math.cos(a), cy + r * Math.sin(a)));
+        }
+      };
+      const line = (x0: number, y0: number, x1: number, y1: number) => {
+        const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / STEP));
+        for (let i = 0; i < n; i++) out.push(pt(x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n));
+      };
+      line(x + r, y, x + w - r, y);
+      arc(x + w - r, y + r, -Math.PI / 2);
+      line(x + w, y + r, x + w, y + h - r);
+      arc(x + w - r, y + h - r, 0);
+      line(x + w - r, y + h, x + r, y + h);
+      arc(x + r, y + h - r, Math.PI / 2);
+      line(x, y + h - r, x, y + r);
+      arc(x + r, y + r, Math.PI);
+      return out;
+    };
+
+    // Same layers as the verify report: title Δy +8, avatar Δw -4 Δh -4, button Δw +24.
+    type Box = { x: number; y: number; w: number; h: number; r: number };
+    const design: Box[] = [
+      { x: 80, y: 56, w: 420, h: 46, r: 12 },
+      { x: 80, y: 150, w: 88, h: 88, r: 44 },
+      { x: 220, y: 156, w: 520, h: 20, r: 10 },
+      { x: 220, y: 200, w: 360, h: 20, r: 10 },
+      { x: 700, y: 262, w: 200, h: 54, r: 27 },
+    ];
+    const built: Box[] = [
+      { ...design[0], y: design[0].y + 8 },
+      { ...design[1], x: design[1].x + 2, y: design[1].y + 2, w: design[1].w - 4, h: design[1].h - 4, r: design[1].r - 2 },
+      design[2],
+      design[3],
+      { ...design[4], w: design[4].w + 24 },
+    ];
+
+    const fig: Dot[] = design.flatMap((b, el) => outline(b.x, b.y, b.w, b.h, b.r).map((p) => ({ hx: p.x, hy: p.y, fx: p.x, fy: p.y, x: p.x, y: p.y, el })));
+    const build: Dot[] = built.flatMap((b, el) => {
+      const d = design[el];
+      return outline(b.x, b.y, b.w, b.h, b.r).map((p) => {
+        // Where this dot lands once the layer is fixed.
+        const sx = d.w / b.w;
+        const sy = d.h / b.h;
+        const fx = el === 1 || el === 4 ? b.x + (p.x - b.x) * sx + (d.x - b.x) : p.x;
+        const fy = el === 0 ? p.y - 8 : el === 1 ? b.y + (p.y - b.y) * sy + (d.y - b.y) : p.y;
+        return { hx: p.x, hy: p.y, fx, fy, x: p.x, y: p.y, el };
+      });
+    });
+    const all = [...fig, ...build];
+    // Intro: every dot starts at a random spot and flies home.
+    all.forEach((d) => {
+      d.x = Math.random() * W;
+      d.y = Math.random() * H;
+    });
+
+    let scale = 1;
+    let dpr = 1;
+    let fixed = 0;
+    let target = 0;
+    let mouse: { x: number; y: number } | null = null;
+    let running = false;
+    let lastSwitch = 0;
+    let raf = 0;
+
+    const resize = () => {
+      const w = canvas.clientWidth;
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      scale = w / W;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(H * scale * dpr);
+    };
+
+    const setState = (isFixed: boolean) => {
+      target = isFixed ? 1 : 0;
+      status.dataset.state = isFixed ? 'pass' : 'fail';
+      status.textContent = isFixed ? 'After fix · PASS' : 'First build · FAIL';
+    };
+
+    const smooth = (r: number, d: number) => {
+      const t = Math.min(1, Math.max(0, 1 - d / r));
+      return t * t * (3 - 2 * t);
+    };
+
+    const step = (now: number) => {
+      if (!running) return;
+      if (!reduced && now - lastSwitch > CYCLE_MS) {
+        lastSwitch = now;
+        setState(target === 0);
+      }
+      fixed += (target - fixed) * 0.06;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+      // Dots shrink on narrow screens so the small shapes stay readable.
+      const size = (2.8 * Math.min(1, scale * 1.6)) / scale;
+      const t = now / 1000;
+      const draw = (dots: Dot[], style: string, alpha: number, useFix: boolean) => {
+        ctx.fillStyle = style;
+        ctx.globalAlpha = alpha;
+        for (const d of dots) {
+          const homeX = useFix ? d.hx + (d.fx - d.hx) * fixed : d.hx;
+          const homeY = useFix ? d.hy + (d.fy - d.hy) * fixed : d.hy;
+          let px = 0;
+          let py = 0;
+          if (mouse) {
+            const dx = homeX - mouse.x;
+            const dy = homeY - mouse.y;
+            const dist = Math.hypot(dx, dy) || 1;
+            const k = smooth(PUSH_RADIUS, dist) * PUSH_RADIUS * 0.5;
+            px = (dx / dist) * k;
+            py = (dy / dist) * k;
+          }
+          d.x += (homeX + px + Math.sin(t * 0.9 + d.hx) * 0.8 - d.x) * 0.1;
+          d.y += (homeY + py + Math.cos(t * 0.8 + d.hy) * 0.8 - d.y) * 0.1;
+          ctx.fillRect(d.x - size / 2, d.y - size / 2, size, size);
+        }
+      };
+      draw(fig, COLORS.fig, 0.9, false);
+      draw(build, COLORS.fail, 0.9 * (1 - fixed), true);
+      draw(build, COLORS.pass, 0.9 * fixed, true);
+      ctx.globalAlpha = 1;
+      raf = requestAnimationFrame(step);
+    };
+
+    const start = () => {
+      if (running) return;
+      running = true;
+      lastSwitch = performance.now();
+      raf = requestAnimationFrame(step);
+    };
+    const stop = () => {
+      running = false;
+      cancelAnimationFrame(raf);
+    };
+
+    resize();
+    addEventListener('resize', resize);
+    if (reduced) {
+      // Static final state: dots in place, build aligned, no loop.
+      all.forEach((d) => {
+        d.x = d.hx;
+        d.y = d.hy;
+      });
+      fixed = 1;
+      setState(true);
+    }
+    root.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'touch') return;
+      const r = canvas.getBoundingClientRect();
+      mouse = { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale };
+    });
+    root.addEventListener('pointerleave', () => (mouse = null));
+
+    new IntersectionObserver(([entry]) => (entry.isIntersecting ? start() : stop()), { threshold: 0.15 }).observe(root);
+  }
+</script>
+
+<style>
+  .dotfield {
+    position: relative;
+    width: 100%;
+    padding-bottom: 48px;
+    cursor: crosshair;
+    touch-action: pan-y;
+  }
+
+  .df-canvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1000 / 360;
+  }
+
+  .df-tag,
+  .df-status {
+    position: absolute;
+    padding: 6px 12px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-glass);
+    background: var(--glass-panel);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+  }
+
+  .df-fig { left: 0; bottom: 0; color: var(--accent-2); border-color: var(--accent-2); }
+  .df-build { left: 120px; bottom: 0; color: var(--accent); border-color: var(--accent); }
+  .df-status { right: 0; bottom: 0; font-family: var(--font-mono); }
+  .df-status[data-state='fail'] { color: var(--fail); border-color: var(--fail); }
+  .df-status[data-state='pass'] { color: var(--pass); border-color: var(--pass); }
+
+  .df-fallback { padding: var(--space-xl) 0; text-align: center; }
+
+  @media (max-width: 640px) {
+    .df-build { left: 96px; }
+    .df-tag, .df-status { font-size: 0.6875rem; padding: 4px 9px; }
+  }
+</style>

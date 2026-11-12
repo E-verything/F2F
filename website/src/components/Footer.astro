@@ -1,5 +1,6 @@
 ---
 import { SITE, url } from '../site';
+import VisitorCount from './VisitorCount.astro';
 
 const year = new Date().getFullYear();
 const repo = SITE.repoUrl;
@@ -58,6 +59,7 @@ const columns = [
     <div class="bottom">
       <span>© {year} {SITE.name}. Open source under {SITE.license}.</span>
       <span class="status"><span class="dot" aria-hidden="true"></span> Runs 100% on your machine</span>
+      <VisitorCount />
     </div>
   </div>
 </footer>

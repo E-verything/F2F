@@ -42,6 +42,19 @@ const ogImage = Astro.site ? new URL(url('/logo.png'), Astro.site).href : undefi
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    <script is:inline>document.documentElement.classList.add('js');</script>
+    {SITE.goatcounter && (
+      <script is:inline define:vars={{ code: SITE.goatcounter }}>
+        // Anonymous page-view counting (no cookies); skipped when the visitor sends Do Not Track.
+        if (navigator.doNotTrack !== '1') {
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://gc.zgo.at/count.js';
+          s.dataset.goatcounter = 'https://' + code + '.goatcounter.com/count';
+          document.head.appendChild(s);
+        }
+      </script>
+    )}
     <slot name="head" />
   </head>
   <body>
@@ -51,6 +64,36 @@ const ogImage = Astro.site ? new URL(url('/logo.png'), Astro.site).href : undefi
       <slot />
     </main>
     <Footer />
+    <script>
+      const items = document.querySelectorAll<HTMLElement>('[data-reveal]');
+      const io = new IntersectionObserver(
+        (entries) =>
+          entries.forEach((e) => {
+            if (!e.isIntersecting) return;
+            e.target.classList.add('is-in');
+            // The stagger delay only belongs to the entrance, not to later hover transitions.
+            setTimeout(() => ((e.target as HTMLElement).style.transitionDelay = ''), 1200);
+            io.unobserve(e.target);
+          }),
+        { threshold: 0.12, rootMargin: '0px 0px -6% 0px' },
+      );
+      // Siblings enter in reading order, 70ms apart.
+      items.forEach((el) => {
+        const i = [...(el.parentElement?.querySelectorAll(':scope > [data-reveal]') ?? [])].indexOf(el);
+        el.style.transitionDelay = `${Math.max(0, i) * 70}ms`;
+        io.observe(el);
+      });
+
+      if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
+        document.addEventListener('pointermove', (e) => {
+          const card = (e.target as Element).closest<HTMLElement>('.spot');
+          if (!card) return;
+          const r = card.getBoundingClientRect();
+          card.style.setProperty('--mx', `${e.clientX - r.left}px`);
+          card.style.setProperty('--my', `${e.clientY - r.top}px`);
+        });
+      }
+    </script>
   </body>
 </html>
 

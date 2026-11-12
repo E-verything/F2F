@@ -17,7 +17,8 @@ npm run preview   # serve the production build
 | Variable | Use | When unset |
 |---|---|---|
 | `SITE_URL` | Public URL: canonical links, sitemap, absolute links in `llms.txt` and `robots.txt` | Build still works; sitemap and absolute links are skipped |
-| `PUBLIC_REPO_URL` | Source-code, issues and license links | Those links are hidden |
+| `PUBLIC_REPO_URL` | Source-code, issues and license links, and the GitHub star button | Those links and the star button are hidden |
+| `PUBLIC_GOATCOUNTER_CODE` | GoatCounter site code for anonymous visit counting and the public visit count in the footer (public value, kept in `website/.env`) | No counting and no count shown; the Privacy page says so |
 
 ## Content sources
 
