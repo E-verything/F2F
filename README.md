@@ -1,6 +1,33 @@
 <p align="center"><img src="brand/logo.png" width="120" alt="F2F logo" /></p>
 
-# F2F
+<h1 align="center">F2F</h1>
+
+<p align="center"><strong>Figma to working frontend. Measured, not guessed.</strong></p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/f2f-cli"><img alt="npm version" src="https://img.shields.io/npm/v/f2f-cli?logo=npm&color=cb3837" /></a>
+  <a href="https://www.npmjs.com/package/f2f-cli"><img alt="npm weekly downloads" src="https://img.shields.io/npm/dw/f2f-cli?logo=npm&color=cb3837" /></a>
+  <a href="https://github.com/E-verything/F2F/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/E-verything/F2F/ci.yml?branch=main&label=CI&logo=github" /></a>
+  <a href="https://github.com/E-verything/F2F/actions/workflows/website.yml"><img alt="Website deploy" src="https://img.shields.io/github/actions/workflow/status/E-verything/F2F/website.yml?branch=main&label=website&logo=githubpages" /></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/E-verything/F2F?color=blue" /></a>
+</p>
+
+<p align="center">
+  <a href="https://nodejs.org"><img alt="Node version" src="https://img.shields.io/node/v/f2f-cli?logo=nodedotjs&color=339933" /></a>
+  <a href="https://socket.dev/npm/package/f2f-cli"><img alt="Socket supply chain score" src="https://socket.dev/api/badge/npm/package/f2f-cli" /></a>
+  <a href="https://security.snyk.io/package/npm/f2f-cli"><img alt="Snyk vulnerabilities" src="https://snyk.io/test/npm/f2f-cli/badge.svg" /></a>
+  <img alt="No telemetry" src="https://img.shields.io/badge/telemetry-none-brightgreen" />
+  <a href="https://github.com/E-verything/F2F/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/E-verything/F2F?style=flat&logo=github" /></a>
+  <a href="https://github.com/E-verything/F2F/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/E-verything/F2F" /></a>
+</p>
+
+<p align="center">
+  <a href="https://f2f.js.org">Website</a> ·
+  <a href="docs/getting-started.md">Get started</a> ·
+  <a href="https://www.figma.com/community/plugin/1691251414681348956">Figma plugin</a> ·
+  <a href="https://www.npmjs.com/package/f2f-cli">npm</a> ·
+  <a href="docs/benchmark.md">Benchmark</a>
+</p>
 
 A free, open-source (MIT), local-first tool that turns a Figma design into a portable `f2f/` package for any AI coding agent. It maps the design to your existing codebase and then **measures** the built screen against the design.
 
