@@ -45,9 +45,9 @@ Commands:
   report [--package <dir>] [--open]    Write verification/index.html: every verified screen with Figma, your app and
                                        the heatmap side by side, wrong layers boxed, and what is wrong in words.`;
 
-// Opens the report in the default browser; detached so the CLI exits at once.
+// Opens the report in the default browser; detached so the CLI exits at once, and explorer on Windows so the path never goes through cmd's parsing.
 function openFile(path: string) {
-  const [bin, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '""', path]] : process.platform === 'darwin' ? ['open', [path]] : ['xdg-open', [path]];
+  const [bin, args] = process.platform === 'win32' ? ['explorer.exe', [path]] : process.platform === 'darwin' ? ['open', [path]] : ['xdg-open', [path]];
   spawn(bin, args, { detached: true, stdio: 'ignore', shell: false }).unref();
 }
 
