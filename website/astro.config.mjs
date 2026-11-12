@@ -9,7 +9,8 @@ export default defineConfig({
   site,
   // A sub-path deploy (e.g. GitHub Pages at /F2F) sets BASE_PATH; a domain root needs nothing.
   base: process.env.BASE_PATH || '/',
-  trailingSlash: 'never',
+  // GitHub Pages serves docs/index.html at /docs/ and redirects /docs, so every URL, canonical and sitemap entry uses the slash form.
+  trailingSlash: 'always',
   compressHTML: true,
   build: { inlineStylesheets: 'auto' },
   prefetch: { prefetchAll: false, defaultStrategy: 'hover' },

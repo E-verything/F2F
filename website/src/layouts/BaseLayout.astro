@@ -12,7 +12,7 @@ interface Props {
 
 const { title, description, noindex = false } = Astro.props;
 const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined;
-const ogImage = Astro.site ? new URL(url('/logo.png'), Astro.site).href : undefined;
+const ogImage = Astro.site ? new URL(url('/og-image.jpg'), Astro.site).href : undefined;
 ---
 
 <!doctype html>
@@ -38,8 +38,11 @@ const ogImage = Astro.site ? new URL(url('/logo.png'), Astro.site).href : undefi
     <meta property="og:description" content={description} />
     {canonical && <meta property="og:url" content={canonical} />}
     {ogImage && <meta property="og:image" content={ogImage} />}
+    {ogImage && <meta property="og:image:width" content="1200" />}
+    {ogImage && <meta property="og:image:height" content="630" />}
+    {ogImage && <meta property="og:image:alt" content="F2F: your design, built exactly" />}
     {ogImage && <meta name="twitter:image" content={ogImage} />}
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <script is:inline>document.documentElement.classList.add('js');</script>

@@ -41,18 +41,9 @@ const checks = [
   { name: 'Visual diff', body: 'On web: a pixel diff against the Figma screenshot that ignores edge-only anti-aliasing; a hint for images and icons.' },
 ] as const;
 
-const howToJsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'HowTo',
-  name: 'Turn a Figma design into a verified frontend with an AI coding agent',
-  description,
-  step: steps.map((s) => ({ '@type': 'HowToStep', position: Number(s.n), name: s.title, text: s.body })),
-};
 ---
 
 <BaseLayout title={title} description={description}>
-  <script slot="head" type="application/ld+json" set:html={JSON.stringify(howToJsonLd)} />
-
   <article class="container section wrap">
     <header class="page-head">
       <span class="label">How it works</span>

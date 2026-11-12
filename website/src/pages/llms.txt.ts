@@ -11,9 +11,13 @@ export const GET: APIRoute = ({ site }) => {
     '',
     '## Pages',
     '',
-    `- [Home](${url('/')}): Overview and the export, brief, implement, verify loop.`,
+    `- [Home](${url(path('/'))}): Overview and the export, brief, implement, verify loop.`,
     ...NAV.map((n) => `- [${n.label}](${url(n.href)})`),
-    `- [Privacy](${url('/privacy')})`,
+    `- [Privacy](${url(path('/privacy'))})`,
+    '',
+    '## Full text',
+    '',
+    `- [llms-full.txt](${url(path('/llms-full.txt'))}): the getting-started guide and the FAQ as plain text.`,
     '',
   ].join('\n');
   return new Response(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });

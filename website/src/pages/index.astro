@@ -10,7 +10,7 @@ import Icon from '../components/Icon.astro';
 import { SITE, url } from '../site';
 
 const title = `${SITE.name} - Figma to working frontend with any AI coding agent`;
-const description = 'Free, open-source, local-first. Export exact design values from Figma, give your AI agent a repo-aware brief, then measure the built screen against the design to ±1 px on web, Flutter, Android and iOS.';
+const description = 'Free, open-source, local-first. Export exact design values from Figma, give your agent a repo-aware brief, then measure the built screen against the design to ±1 px on web, Flutter, Android and iOS.';
 
 const parts = [
   { icon: 'figma', step: '01', name: 'Figma plugin', where: 'In Figma desktop', body: 'Exports exact layout, colours, text, components, icons and reference screenshots as one portable folder. Nothing leaves your machine.' },
@@ -37,15 +37,27 @@ const platforms = [
 
 const stacks = ['React', 'Next.js', 'Vue', 'Svelte', 'HTML', 'Flutter', 'React Native', 'Jetpack Compose', 'SwiftUI', 'Android', 'iOS'] as const;
 
+const siteUrl = Astro.site?.href;
+const owner = SITE.repoUrl ? new URL(SITE.repoUrl).pathname.split('/')[1] : null;
+
 const softwareJsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
-  name: SITE.name,
-  applicationCategory: 'DeveloperApplication',
-  operatingSystem: 'Windows, macOS, Linux',
-  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-  license: 'https://opensource.org/licenses/MIT',
-  description,
+  '@graph': [
+    {
+      '@type': 'SoftwareApplication',
+      name: SITE.name,
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'Windows, macOS, Linux',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      isAccessibleForFree: true,
+      license: 'https://opensource.org/licenses/MIT',
+      description,
+      ...(siteUrl && { url: siteUrl, image: new URL(url('/og-image.jpg'), siteUrl).href, softwareHelp: new URL(url('/docs'), siteUrl).href }),
+      ...(SITE.repoUrl && { sameAs: [SITE.repoUrl] }),
+      ...(owner && { author: { '@type': 'Organization', name: owner, url: `https://github.com/${owner}` } }),
+    },
+    { '@type': 'WebSite', name: SITE.name, description: SITE.tagline, ...(siteUrl && { url: siteUrl }) },
+  ],
 };
 ---
 
@@ -56,7 +68,7 @@ const softwareJsonLd = {
     <div class="container hero-grid">
       <div class="hero-copy fade-up">
         <span class="glass-pill"><span class="dot"></span>Open source · Local-first · Any stack</span>
-        <h1>Figma to frontend.<br /><em class="accent-serif gradient-text">Measured, not guessed.</em></h1>
+        <h1>Figma to frontend.{' '}<br /><em class="accent-serif gradient-text">Measured, not guessed.</em></h1>
         <p class="hero-sub">
           Give your AI coding agent the exact design values and a brief that knows your codebase. Then check the built
           screen against Figma, layer by layer, until it passes.

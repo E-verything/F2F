@@ -11,7 +11,12 @@ export const SITE = {
 } as const;
 
 // Internal links go through url() so the site works at a domain root and under a sub-path (BASE_PATH).
-export const url = (path: string) => `${import.meta.env.BASE_URL.replace(/\/$/, '')}${path}`;
+// Page paths get a trailing slash (before any #hash) to match the served URLs; files with an extension keep none.
+export const url = (path: string) => {
+  const [p, rest = ''] = path.split(/(?=[#?])/);
+  const clean = p.endsWith('/') || /\.[a-z0-9]+$/i.test(p) ? p : `${p}/`;
+  return `${import.meta.env.BASE_URL.replace(/\/$/, '')}${clean}${rest}`;
+};
 
 export const NAV = [
   { href: url('/how-it-works'), label: 'How it works' },
